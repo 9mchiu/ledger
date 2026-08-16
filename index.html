@@ -147,6 +147,27 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .set-item button{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;color:var(--text);}
 .hint{font-size:11.5px;color:var(--faint);margin-top:14px;text-align:center;}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+/* report */
+#reportView{position:fixed;inset:0;z-index:80;background:#fff;color:#1a1a1a;overflow:auto;display:none;
+  font-family:-apple-system,"PingFang TC","Microsoft JhengHei",system-ui,sans-serif;}
+#reportView.show{display:block;}
+.rv-inner{max-width:720px;margin:0 auto;padding:18px 22px 60px;}
+.rv-actions{position:sticky;top:0;display:flex;gap:10px;justify-content:flex-end;padding:12px 0;background:#fff;border-bottom:1px solid #eee;margin-bottom:16px;}
+.rv-actions button{border:1px solid #ccc;border-radius:9px;padding:9px 16px;font-size:14px;font-weight:700;background:#f3f2ee;color:#222;}
+.rv-actions .pri{background:#B27916;color:#fff;border-color:#B27916;}
+.rv-title{font-size:21px;font-weight:800;margin:4px 0 2px;}
+.rv-sub{color:#666;font-size:12.5px;margin-bottom:14px;}
+.rv-total{font-size:14px;margin:12px 0 4px;}
+.rv-total b{font-size:25px;}
+#reportView h3{font-size:14px;margin:20px 0 6px;border-bottom:2px solid #B27916;padding-bottom:4px;display:inline-block;}
+#reportView table{border-collapse:collapse;width:100%;font-size:12.5px;margin:8px 0 18px;}
+#reportView th,#reportView td{border:1px solid #ddd;padding:6px 9px;text-align:left;}
+#reportView th{background:#f2efe8;}
+#reportView td.r,#reportView th.r{text-align:right;font-variant-numeric:tabular-nums;}
+@media print{@page{margin:14mm;}
+  body>*:not(#reportView){display:none!important;}
+  #reportView{position:static;display:block!important;}
+  .rv-actions{display:none!important;} .rv-inner{max-width:none;padding:0;}}
 </style>
 
 <div class="app">
@@ -209,10 +230,19 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
   <h2>設定與備份</h2>
   <div class="set-item"><div><div class="st">匯出備份</div><div class="sd">存成 JSON 檔，換手機/清資料前先備份</div></div><button id="expBtn">匯出</button></div>
   <div class="set-item"><div><div class="st">匯入備份</div><div class="sd">從 JSON 檔還原</div></div><button id="impBtn">匯入</button></div>
+  <div class="set-item"><div><div class="st">本月報表（列印 / 存 PDF）</div><div class="sd">分類統計＋明細，適合對帳、報帳</div></div><button id="reportBtn">開啟</button></div>
+  <div class="set-item"><div><div class="st">匯出 CSV（Excel）</div><div class="sd">可用 Excel 開啟分析</div></div><span style="display:flex;gap:6px"><button id="csvMonthBtn">本月</button><button id="csvAllBtn">全部</button></span></div>
   <div class="set-item"><div><div class="st">外觀</div><div class="sd">跟隨系統／深色／淺色</div></div><button id="themeBtn2">跟隨系統</button></div>
   <div class="set-item"><div><div class="st st-danger" style="color:var(--danger)">清空所有紀錄</div><div class="sd">此動作無法復原</div></div><button id="clrBtn" style="color:var(--danger)">清空</button></div>
   <p class="hint">資料只存在這個瀏覽器（你的手機）。加到主畫面後就像 App 一樣。</p>
   <input type="file" id="impFile" accept="application/json" hidden>
+</div>
+
+<div id="reportView">
+  <div class="rv-inner">
+    <div class="rv-actions"><button onclick="closeReport()">關閉</button><button class="pri" onclick="window.print()">列印 / 存 PDF</button></div>
+    <div id="rvBody"></div>
+  </div>
 </div>
 
 <script>
@@ -379,6 +409,36 @@ $('#impFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new Fi
   r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d.items)){items=d.items;LS.set('ledger_items',items);closeModal();render();alert('匯入成功！');}}catch(err){alert('檔案格式不正確');}};
   r.readAsText(f);e.target.value='';};
 $('#clrBtn').onclick=()=>{if(confirm('確定清空所有紀錄？無法復原')){items=[];LS.set('ledger_items',items);closeModal();render();}};
+
+/* 報表：CSV + 可列印月報表 */
+function csvCell(s){s=(s==null?'':''+s);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function exportCSV(scope){
+  const rows=(scope==='month'?monthItems():items).slice().sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  if(!rows.length){alert('沒有資料可匯出');return;}
+  let csv='﻿日期,分類,金額,備註\n';
+  rows.forEach(x=>{csv+=[x.date,x.cat,x.amount,csvCell(x.note)].join(',')+'\n';});
+  download2((scope==='month'?`記帳_${curMonth}`:'記帳_全部')+'.csv',csv,'text/csv;charset=utf-8');
+}
+function download2(name,str,type){const b=new Blob([str],{type});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();}
+$('#csvMonthBtn').onclick=()=>exportCSV('month');
+$('#csvAllBtn').onclick=()=>exportCSV('all');
+function openReport(){
+  const mi=monthItems(),[y,m]=curMonth.split('-');
+  const total=mi.reduce((s,x)=>s+x.amount,0),by={};
+  mi.forEach(x=>by[x.cat]=(by[x.cat]||0)+x.amount);
+  const cats=Object.entries(by).sort((a,b)=>b[1]-a[1]);
+  const catRows=cats.map(([k,v])=>`<tr><td>${(catMap[k]||{e:''}).e} ${k}</td><td class="r">${fmt(v)}</td><td class="r">${total?Math.round(v/total*100):0}%</td></tr>`).join('')||'<tr><td colspan="3">無</td></tr>';
+  const rows=mi.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  const itemRows=rows.map(x=>`<tr><td>${x.date}</td><td>${x.cat}</td><td>${escapeHtml(x.note||'')}</td><td class="r">${fmt(x.amount)}</td></tr>`).join('')||'<tr><td colspan="4">本月無紀錄</td></tr>';
+  $('#rvBody').innerHTML=`<div class="rv-title">支出月報表　${y} 年 ${+m} 月</div>
+    <div class="rv-sub">產生日期：${todayStr()}　·　共 ${mi.length} 筆</div>
+    <div class="rv-total">本月支出合計　<b>NT$ ${fmt(total)}</b></div>
+    <h3>分類統計</h3><table><thead><tr><th>分類</th><th class="r">金額</th><th class="r">占比</th></tr></thead><tbody>${catRows}</tbody></table>
+    <h3>明細</h3><table><thead><tr><th>日期</th><th>分類</th><th>備註</th><th class="r">金額</th></tr></thead><tbody>${itemRows}</tbody></table>`;
+  document.getElementById('reportView').classList.add('show');
+}
+function closeReport(){document.getElementById('reportView').classList.remove('show');}
+$('#reportBtn').onclick=()=>{closeModal();openReport();};
 
 applyTheme();render();
 </script>
