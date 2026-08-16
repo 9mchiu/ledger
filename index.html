@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="記帳">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#151319" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F6F3EC" media="(prefers-color-scheme: light)">
+<title>記帳 · Ledger</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%B0%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%B0%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<style>
+:root{
+  --bg:#F6F3EC; --surface:#FFFFFF; --surface2:#F1ECE2; --line:#E5DFD3;
+  --text:#25222A; --muted:#6E6975; --faint:#A69FAB;
+  --accent:#B27916; --accent-ink:#FFFFFF; --accent-soft:rgba(178,121,22,.12);
+  --danger:#C0392B; --shadow:0 8px 24px rgba(40,34,20,.10);
+  --c-food:#E8894A; --c-transit:#3E8FE0; --c-shop:#DE6C9F; --c-fun:#9B7BE0;
+  --c-home:#3FB093; --c-med:#DE574E; --c-edu:#57B457; --c-bill:#3FA3C4; --c-other:#8B93A1;
+  --radius:16px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#151319; --surface:#1E1B24; --surface2:#27232E; --line:#332F3B;
+  --text:#EFEAE2; --muted:#A39CAA; --faint:#6C6673;
+  --accent:#E3A93F; --accent-ink:#1B1710; --accent-soft:rgba(227,169,63,.16);
+  --danger:#E5675A; --shadow:0 10px 30px rgba(0,0,0,.45);
+}}
+:root[data-theme="dark"]{
+  --bg:#151319; --surface:#1E1B24; --surface2:#27232E; --line:#332F3B;
+  --text:#EFEAE2; --muted:#A39CAA; --faint:#6C6673;
+  --accent:#E3A93F; --accent-ink:#1B1710; --accent-soft:rgba(227,169,63,.16);
+  --danger:#E5675A; --shadow:0 10px 30px rgba(0,0,0,.45);
+}
+:root[data-theme="light"]{
+  --bg:#F6F3EC; --surface:#FFFFFF; --surface2:#F1ECE2; --line:#E5DFD3;
+  --text:#25222A; --muted:#6E6975; --faint:#A69FAB;
+  --accent:#B27916; --accent-ink:#FFFFFF; --accent-soft:rgba(178,121,22,.12);
+  --danger:#C0392B; --shadow:0 8px 24px rgba(40,34,20,.10);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%;}
+.num{font-variant-numeric:tabular-nums;}
+.app{max-width:460px;margin:0 auto;padding:0 16px 120px;}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit;}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+/* header */
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;
+  padding:16px 0 10px;background:linear-gradient(var(--bg) 78%,transparent);}
+.brand{font-size:20px;font-weight:800;letter-spacing:.5px;}
+.brand span{font-size:11px;font-weight:600;color:var(--faint);letter-spacing:2px;text-transform:uppercase;margin-left:6px;}
+.top-actions{display:flex;gap:6px;}
+.icbtn{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+  color:var(--muted);background:var(--surface);border:1px solid var(--line);font-size:17px;}
+.icbtn:active{transform:scale(.94);}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);}
+
+/* summary */
+.summary{padding:18px 18px 16px;margin-bottom:14px;}
+.month-nav{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px;}
+.month-nav button{width:34px;height:34px;border-radius:9px;color:var(--muted);font-size:18px;background:var(--surface2);}
+.month-nav .mlabel{font-size:15px;font-weight:700;min-width:118px;text-align:center;}
+.total-lbl{font-size:12px;color:var(--muted);letter-spacing:1px;}
+.total{display:flex;align-items:baseline;gap:6px;margin:2px 0 8px;}
+.total .cur{font-size:20px;font-weight:700;color:var(--muted);}
+.total .amt{font-size:42px;font-weight:800;letter-spacing:-.5px;}
+.subline{display:flex;flex-wrap:wrap;gap:10px;font-size:12.5px;color:var(--muted);align-items:center;}
+.delta{font-weight:700;padding:1px 8px;border-radius:20px;background:var(--surface2);}
+.delta.up{color:var(--danger);} .delta.down{color:var(--c-home);}
+
+/* chart */
+.chart{padding:16px 18px;margin-bottom:14px;display:flex;gap:16px;align-items:center;}
+.donut-wrap{flex:0 0 128px;position:relative;width:128px;height:128px;}
+.donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+.donut-center .dc-top{font-size:11px;color:var(--muted);}
+.donut-center .dc-num{font-size:19px;font-weight:800;}
+.legend{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;}
+.leg{display:flex;align-items:center;gap:9px;font-size:13px;}
+.leg .dot{width:10px;height:10px;border-radius:3px;flex:0 0 auto;}
+.leg .lname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.leg .lpct{color:var(--faint);font-size:11.5px;width:34px;text-align:right;}
+.leg .lamt{font-weight:700;width:64px;text-align:right;}
+
+/* list */
+.daygroup{margin-top:16px;}
+.dayhead{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:12px;color:var(--muted);padding:0 4px 6px;}
+.dayhead .dsum{font-weight:700;color:var(--faint);}
+.row{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--surface);
+  border:1px solid var(--line);border-radius:13px;margin-bottom:8px;width:100%;text-align:left;}
+.row:active{background:var(--surface2);}
+.ic{flex:0 0 auto;width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.rmid{flex:1;min-width:0;}
+.rmid .rcat{font-size:14.5px;font-weight:600;}
+.rmid .rnote{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ramt{font-weight:800;font-size:15px;}
+.empty{text-align:center;color:var(--faint);padding:48px 20px;font-size:14px;}
+.empty .big{font-size:34px;margin-bottom:10px;}
+
+/* FAB */
+.fab{position:fixed;left:50%;transform:translateX(calc(-50% + 172px));bottom:26px;z-index:30;
+  width:60px;height:60px;border-radius:20px;background:var(--accent);color:var(--accent-ink);
+  font-size:30px;font-weight:600;box-shadow:0 10px 26px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;}
+.fab:active{transform:translateX(calc(-50% + 172px)) scale(.93);}
+@media(max-width:492px){.fab{transform:none;left:auto;right:20px;} .fab:active{transform:scale(.93);}}
+
+/* sheet / modal */
+.backdrop{position:fixed;inset:0;background:rgba(10,8,12,.5);z-index:40;opacity:0;pointer-events:none;transition:opacity .2s;}
+.backdrop.on{opacity:1;pointer-events:auto;}
+.sheet{position:fixed;left:50%;transform:translateX(-50%) translateY(102%);bottom:0;width:100%;max-width:460px;z-index:50;
+  background:var(--surface);border-radius:22px 22px 0 0;border:1px solid var(--line);border-bottom:0;
+  padding:8px 18px calc(20px + env(safe-area-inset-bottom));transition:transform .26s cubic-bezier(.22,1,.36,1);max-height:92vh;overflow-y:auto;}
+.sheet.on{transform:translateX(-50%) translateY(0);}
+.grab{width:38px;height:4px;border-radius:2px;background:var(--line);margin:6px auto 12px;}
+.sheet h2{font-size:16px;margin:0 0 14px;font-weight:800;}
+.amt-input{display:flex;align-items:baseline;gap:8px;border-bottom:2px solid var(--line);padding-bottom:8px;margin-bottom:16px;}
+.amt-input .cur{font-size:22px;color:var(--muted);font-weight:700;}
+.amt-input input{flex:1;min-width:0;border:0;background:none;color:var(--text);font-size:38px;font-weight:800;padding:0;
+  font-variant-numeric:tabular-nums;}
+.amt-input input:focus{outline:none;}
+.flabel{font-size:12px;color:var(--muted);margin:0 0 8px;letter-spacing:.5px;}
+.chips{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;}
+.chip{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px;border-radius:12px;
+  background:var(--surface2);border:1.5px solid transparent;font-size:11px;color:var(--muted);}
+.chip .ce{font-size:20px;}
+.chip.sel{border-color:var(--accent);background:var(--accent-soft);color:var(--text);font-weight:700;}
+.frow{display:flex;gap:10px;margin-bottom:16px;}
+.field{flex:1;}
+.field input{width:100%;background:var(--surface2);border:1px solid var(--line);color:var(--text);
+  border-radius:11px;padding:11px 12px;font-size:15px;}
+.save{width:100%;background:var(--accent);color:var(--accent-ink);border-radius:13px;padding:14px;
+  font-size:16px;font-weight:800;margin-top:2px;}
+.save:active{transform:scale(.99);}
+.del{width:100%;background:transparent;color:var(--danger);border:1px solid var(--line);border-radius:13px;
+  padding:12px;font-size:14px;font-weight:700;margin-top:10px;}
+.set-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 4px;border-bottom:1px solid var(--line);}
+.set-item:last-child{border-bottom:0;}
+.set-item .st{font-size:14px;}
+.set-item .sd{font-size:11.5px;color:var(--muted);}
+.set-item button{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;color:var(--text);}
+.hint{font-size:11.5px;color:var(--faint);margin-top:14px;text-align:center;}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">記帳<span>Ledger</span></div>
+    <div class="top-actions">
+      <button class="icbtn" id="themeBtn" aria-label="切換深淺色">◐</button>
+      <button class="icbtn" id="setBtn" aria-label="設定與備份">⚙</button>
+    </div>
+  </header>
+
+  <section class="summary card">
+    <div class="month-nav">
+      <button id="prevM" aria-label="上個月">‹</button>
+      <div class="mlabel num" id="mlabel">—</div>
+      <button id="nextM" aria-label="下個月">›</button>
+    </div>
+    <div class="total-lbl">本月支出</div>
+    <div class="total"><span class="cur">NT$</span><span class="amt num" id="total">0</span></div>
+    <div class="subline">
+      <span id="count" class="num">0 筆</span>
+      <span id="avg" class="num">·</span>
+      <span id="delta"></span>
+    </div>
+  </section>
+
+  <section class="chart card" id="chartCard" hidden>
+    <div class="donut-wrap">
+      <svg id="donut" viewBox="0 0 42 42" width="128" height="128" aria-hidden="true"></svg>
+      <div class="donut-center"><div class="dc-top">筆數</div><div class="dc-num num" id="dcNum">0</div></div>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section id="list"></section>
+  <button class="fab" id="addBtn" aria-label="記一筆">＋</button>
+</div>
+
+<div class="backdrop" id="backdrop"></div>
+
+<!-- add / edit sheet -->
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="記一筆">
+  <div class="grab"></div>
+  <h2 id="sheetTitle">記一筆</h2>
+  <div class="amt-input"><span class="cur">NT$</span>
+    <input id="fAmt" inputmode="numeric" placeholder="0" aria-label="金額"></div>
+  <p class="flabel">分類</p>
+  <div class="chips" id="chips"></div>
+  <div class="frow">
+    <div class="field"><p class="flabel">日期</p><input id="fDate" type="date"></div>
+    <div class="field"><p class="flabel">備註（可留空）</p><input id="fNote" placeholder="例：午餐"></div>
+  </div>
+  <button class="save" id="saveBtn">儲存</button>
+  <button class="del" id="delBtn" hidden>刪除這筆</button>
+</div>
+
+<!-- settings sheet -->
+<div class="sheet" id="setSheet" role="dialog" aria-modal="true" aria-label="設定">
+  <div class="grab"></div>
+  <h2>設定與備份</h2>
+  <div class="set-item"><div><div class="st">匯出備份</div><div class="sd">存成 JSON 檔，換手機/清資料前先備份</div></div><button id="expBtn">匯出</button></div>
+  <div class="set-item"><div><div class="st">匯入備份</div><div class="sd">從 JSON 檔還原</div></div><button id="impBtn">匯入</button></div>
+  <div class="set-item"><div><div class="st">外觀</div><div class="sd">跟隨系統／深色／淺色</div></div><button id="themeBtn2">跟隨系統</button></div>
+  <div class="set-item"><div><div class="st st-danger" style="color:var(--danger)">清空所有紀錄</div><div class="sd">此動作無法復原</div></div><button id="clrBtn" style="color:var(--danger)">清空</button></div>
+  <p class="hint">資料只存在這個瀏覽器（你的手機）。加到主畫面後就像 App 一樣。</p>
+  <input type="file" id="impFile" accept="application/json" hidden>
+</div>
+
+<script>
+const CATS=[
+ {k:'餐飲',e:'🍜',c:'--c-food'},{k:'交通',e:'🚕',c:'--c-transit'},{k:'購物',e:'🛍️',c:'--c-shop'},
+ {k:'娛樂',e:'🎬',c:'--c-fun'},{k:'居家',e:'🏠',c:'--c-home'},{k:'醫療',e:'💊',c:'--c-med'},
+ {k:'教育',e:'📚',c:'--c-edu'},{k:'帳單',e:'💡',c:'--c-bill'},{k:'其他',e:'🧾',c:'--c-other'}];
+const catMap=Object.fromEntries(CATS.map(c=>[c.k,c]));
+const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let items=LS.get('ledger_items',[]);
+let curMonth=(new Date()).toISOString().slice(0,7); // YYYY-MM
+let editId=null;
+const $=s=>document.querySelector(s);
+const cssv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt=n=>Math.round(n).toLocaleString('en-US');
+const todayStr=()=>{const d=new Date();return d.toISOString().slice(0,10);};
+
+/* theme */
+function applyTheme(){const t=LS.get('ledger_theme','auto');
+  if(t==='auto')document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme',t);
+  $('#themeBtn2').textContent={auto:'跟隨系統',dark:'深色',light:'淺色'}[t];}
+function cycleTheme(){const order=['auto','dark','light'];let t=LS.get('ledger_theme','auto');
+  t=order[(order.indexOf(t)+1)%3];LS.set('ledger_theme',t);applyTheme();}
+$('#themeBtn').onclick=cycleTheme; $('#themeBtn2').onclick=cycleTheme;
+
+/* month nav */
+function shiftMonth(d){const [y,m]=curMonth.split('-').map(Number);const dt=new Date(y,m-1+d,1);
+  curMonth=dt.toISOString().slice(0,7);render();}
+$('#prevM').onclick=()=>shiftMonth(-1); $('#nextM').onclick=()=>shiftMonth(1);
+
+/* render */
+function monthItems(){return items.filter(x=>x.date.slice(0,7)===curMonth);}
+function render(){
+  const [y,m]=curMonth.split('-');
+  $('#mlabel').textContent=`${y} / ${m}`;
+  const mi=monthItems();
+  const total=mi.reduce((s,x)=>s+x.amount,0);
+  $('#total').textContent=fmt(total);
+  $('#count').textContent=`${mi.length} 筆`;
+  // 日均 (only up to today if current month)
+  const [yy,mm]=curMonth.split('-').map(Number);
+  const now=new Date(); const isCur=(yy===now.getFullYear()&&mm===now.getMonth()+1);
+  const daysUsed=isCur?now.getDate():new Date(yy,mm,0).getDate();
+  $('#avg').textContent=total?`日均 ${fmt(total/daysUsed)}`:'·';
+  // delta vs prev month
+  const pd=new Date(yy,mm-2,1).toISOString().slice(0,7);
+  const pt=items.filter(x=>x.date.slice(0,7)===pd).reduce((s,x)=>s+x.amount,0);
+  const de=$('#delta');
+  if(pt>0&&total>0){const diff=(total-pt)/pt*100;de.className='delta '+(diff>=0?'up':'down');
+    de.textContent=`${diff>=0?'▲':'▼'} ${Math.abs(diff).toFixed(0)}% 上月`;de.hidden=false;}
+  else{de.textContent='';de.className='delta';}
+  renderChart(mi);
+  renderList(mi);
+}
+
+function renderChart(mi){
+  const card=$('#chartCard');
+  if(!mi.length){card.hidden=true;return;} card.hidden=false;
+  const by={}; mi.forEach(x=>by[x.cat]=(by[x.cat]||0)+x.amount);
+  const total=mi.reduce((s,x)=>s+x.amount,0);
+  const arr=Object.entries(by).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v);
+  // donut
+  const svg=$('#donut'); svg.innerHTML='';
+  const cx=21,cy=21,r=15.9155,C=2*Math.PI*r;
+  const ring=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  ring.setAttribute('cx',cx);ring.setAttribute('cy',cy);ring.setAttribute('r',r);
+  ring.setAttribute('fill','none');ring.setAttribute('stroke',cssv('--surface2'));ring.setAttribute('stroke-width','5');
+  svg.appendChild(ring);
+  let off=0;
+  arr.forEach(s=>{
+    const frac=s.v/total, len=frac*C;
+    const seg=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    seg.setAttribute('cx',cx);seg.setAttribute('cy',cy);seg.setAttribute('r',r);
+    seg.setAttribute('fill','none');seg.setAttribute('stroke',cssv((catMap[s.k]||{c:'--c-other'}).c));
+    seg.setAttribute('stroke-width','5');seg.setAttribute('stroke-dasharray',`${len} ${C-len}`);
+    seg.setAttribute('stroke-dashoffset',`${-off}`);
+    seg.setAttribute('transform',`rotate(-90 ${cx} ${cy})`);
+    svg.appendChild(seg); off+=len;
+  });
+  $('#dcNum').textContent=mi.length;
+  // legend
+  const leg=$('#legend'); leg.innerHTML='';
+  arr.forEach(s=>{const cm=catMap[s.k]||{e:'🧾',c:'--c-other'};
+    const el=document.createElement('div');el.className='leg';
+    el.innerHTML=`<span class="dot" style="background:var(${cm.c})"></span>
+      <span class="lname">${cm.e} ${s.k}</span>
+      <span class="lpct num">${Math.round(s.v/total*100)}%</span>
+      <span class="lamt num">${fmt(s.v)}</span>`;
+    leg.appendChild(el);});
+}
+
+function dayLabel(ds){const t=todayStr();
+  const y=new Date();y.setDate(y.getDate()-1);const yd=y.toISOString().slice(0,10);
+  if(ds===t)return '今天'; if(ds===yd)return '昨天';
+  const d=new Date(ds+'T00:00');const w=['日','一','二','三','四','五','六'][d.getDay()];
+  return `${+ds.slice(5,7)}/${+ds.slice(8,10)}（${w}）`;}
+
+function renderList(mi){
+  const list=$('#list');
+  if(!mi.length){list.innerHTML=`<div class="empty"><div class="big">🧾</div>這個月還沒有紀錄<br>點右下角 ＋ 開始記帳</div>`;return;}
+  const byDay={}; mi.forEach(x=>(byDay[x.date]=byDay[x.date]||[]).push(x));
+  const days=Object.keys(byDay).sort().reverse();
+  let h='';
+  days.forEach(ds=>{
+    const rows=byDay[ds].sort((a,b)=>b.id-a.id);
+    const dsum=rows.reduce((s,x)=>s+x.amount,0);
+    h+=`<div class="daygroup"><div class="dayhead"><span>${dayLabel(ds)}</span><span class="dsum num">NT$ ${fmt(dsum)}</span></div>`;
+    rows.forEach(x=>{const cm=catMap[x.cat]||{e:'🧾',c:'--c-other'};
+      h+=`<button class="row" data-id="${x.id}">
+        <span class="ic" style="background:var(${cm.c})22;color:var(${cm.c})">${cm.e}</span>
+        <span class="rmid"><div class="rcat">${x.cat}</div>${x.note?`<div class="rnote">${escapeHtml(x.note)}</div>`:''}</span>
+        <span class="ramt num">${fmt(x.amount)}</span></button>`;});
+    h+=`</div>`;
+  });
+  list.innerHTML=h;
+  list.querySelectorAll('.row').forEach(r=>r.onclick=()=>openSheet(+r.dataset.id));
+}
+function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* sheet */
+let selCat=null;
+function buildChips(){const box=$('#chips');box.innerHTML='';
+  CATS.forEach(c=>{const b=document.createElement('button');b.className='chip';b.dataset.k=c.k;
+    b.innerHTML=`<span class="ce">${c.e}</span>${c.k}`;
+    b.onclick=()=>{selCat=c.k;box.querySelectorAll('.chip').forEach(x=>x.classList.toggle('sel',x.dataset.k===c.k));};
+    box.appendChild(b);});}
+buildChips();
+function setChip(k){selCat=k;$('#chips').querySelectorAll('.chip').forEach(x=>x.classList.toggle('sel',x.dataset.k===k));}
+
+function openSheet(id){
+  editId=id||null;
+  if(id){const x=items.find(i=>i.id===id);$('#sheetTitle').textContent='編輯';
+    $('#fAmt').value=x.amount;setChip(x.cat);$('#fDate').value=x.date;$('#fNote').value=x.note||'';$('#delBtn').hidden=false;}
+  else{$('#sheetTitle').textContent='記一筆';$('#fAmt').value='';setChip(null);selCat=null;
+    $('#fDate').value=todayStr();$('#fNote').value='';$('#delBtn').hidden=true;}
+  openModal('#sheet');setTimeout(()=>$('#fAmt').focus(),260);
+}
+function openModal(sel){$('#backdrop').classList.add('on');$(sel).classList.add('on');}
+function closeModal(){$('#backdrop').classList.remove('on');$('#sheet').classList.remove('on');$('#setSheet').classList.remove('on');}
+$('#backdrop').onclick=closeModal;
+$('#addBtn').onclick=()=>openSheet(null);
+$('#setBtn').onclick=()=>{applyTheme();openModal('#setSheet');};
+
+$('#saveBtn').onclick=()=>{
+  const amt=parseFloat(($('#fAmt').value+'').replace(/[^0-9.]/g,''));
+  if(!amt||amt<=0){$('#fAmt').focus();return;}
+  if(!selCat){alert('請選一個分類');return;}
+  const date=$('#fDate').value||todayStr(), note=$('#fNote').value.trim();
+  if(editId){const x=items.find(i=>i.id===editId);Object.assign(x,{amount:amt,cat:selCat,date,note});}
+  else{items.push({id:Date.now(),amount:amt,cat:selCat,date,note});}
+  LS.set('ledger_items',items);
+  if(date.slice(0,7)!==curMonth)curMonth=date.slice(0,7);
+  closeModal();render();
+};
+$('#delBtn').onclick=()=>{if(editId&&confirm('刪除這筆？')){items=items.filter(i=>i.id!==editId);LS.set('ledger_items',items);closeModal();render();}};
+
+/* backup */
+function download(name,obj){const b=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();}
+$('#expBtn').onclick=()=>download(`記帳備份_${todayStr()}.json`,{items});
+$('#impBtn').onclick=()=>$('#impFile').click();
+$('#impFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d.items)){items=d.items;LS.set('ledger_items',items);closeModal();render();alert('匯入成功！');}}catch(err){alert('檔案格式不正確');}};
+  r.readAsText(f);e.target.value='';};
+$('#clrBtn').onclick=()=>{if(confirm('確定清空所有紀錄？無法復原')){items=[];LS.set('ledger_items',items);closeModal();render();}};
+
+applyTheme();render();
+</script>
+
+</body>
+</html>
