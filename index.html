@@ -121,6 +121,12 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .sheet.on{transform:translateX(-50%) translateY(0);}
 .grab{width:38px;height:4px;border-radius:2px;background:var(--line);margin:6px auto 12px;}
 .sheet h2{font-size:16px;margin:0 0 14px;font-weight:800;}
+/* 記帳表單：可捲內容 + 固定底部按鈕，避免被鍵盤/手勢條切到 */
+#sheet{display:flex;flex-direction:column;padding:8px 0 0;max-height:90vh;}
+#sheet>h2{padding:0 18px;margin:0 0 10px;}
+.sheet-scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 18px 6px;flex:1 1 auto;min-height:0;}
+.sheet-foot{flex:0 0 auto;padding:10px 18px calc(16px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line);}
+.sheet-foot .save{margin-top:0;}
 .amt-input{display:flex;align-items:baseline;gap:8px;border-bottom:2px solid var(--line);padding-bottom:8px;margin-bottom:16px;}
 .amt-input .cur{font-size:22px;color:var(--muted);font-weight:700;}
 .amt-input input{flex:1;min-width:0;border:0;background:none;color:var(--text);font-size:38px;font-weight:800;padding:0;
@@ -216,6 +222,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="記一筆">
   <div class="grab"></div>
   <h2 id="sheetTitle">記一筆</h2>
+  <div class="sheet-scroll">
   <div class="amt-input"><span class="cur">NT$</span>
     <input id="fAmt" inputmode="decimal" placeholder="0" aria-label="金額">
     <button type="button" id="plusBtn" class="plusbtn" aria-label="繼續加一筆">＋</button></div>
@@ -226,8 +233,11 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
     <div class="field"><p class="flabel">日期</p><input id="fDate" type="date"></div>
     <div class="field"><p class="flabel">備註（可留空）</p><input id="fNote" placeholder="例：午餐"></div>
   </div>
+  </div>
+  <div class="sheet-foot">
   <button class="save" id="saveBtn">儲存</button>
   <button class="del" id="delBtn" hidden>刪除這筆</button>
+  </div>
 </div>
 
 <!-- settings sheet -->
