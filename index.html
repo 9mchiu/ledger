@@ -15,6 +15,7 @@
 <link rel="icon" type="image/png" href="icon-192.png">
 </head>
 <body>
+
 <style>
 :root{
   --bg:#F6F3EC; --surface:#FFFFFF; --surface2:#F1ECE2; --line:#E5DFD3;
@@ -250,6 +251,17 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
   <h2>設定與備份</h2>
   <div class="set-item"><div><div class="st">匯出備份</div><div class="sd">存成 JSON 檔，換手機/清資料前先備份</div></div><button id="expBtn">匯出</button></div>
   <div class="set-item"><div><div class="st">匯入備份</div><div class="sd">從 JSON 檔還原</div></div><button id="impBtn">匯入</button></div>
+  <div class="set-item" style="display:block">
+    <div class="st">Google Sheet 同步（自動）</div>
+    <div class="sd" style="margin:2px 0 8px">貼上你的 Apps Script 網址，之後每次記帳會自動鏡像到 Sheet</div>
+    <input id="syncUrl" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec"
+      style="width:100%;background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;font-size:14px;">
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <button id="syncSaveBtn">儲存網址</button>
+      <button id="syncNowBtn">立即同步</button>
+      <span class="sd" id="syncStatus" style="margin-left:auto">未設定</span>
+    </div>
+  </div>
   <div class="set-item"><div><div class="st">本月報表（列印 / 存 PDF）</div><div class="sd">分類統計＋明細，適合對帳、報帳</div></div><button id="reportBtn">開啟</button></div>
   <div class="set-item"><div><div class="st">匯出 CSV（Excel）</div><div class="sd">可用 Excel 開啟分析</div></div><span style="display:flex;gap:6px"><button id="csvMonthBtn">本月</button><button id="csvAllBtn">全部</button></span></div>
   <div class="set-item"><div><div class="st">外觀</div><div class="sd">跟隨系統／深色／淺色</div></div><button id="themeBtn2">跟隨系統</button></div>
@@ -419,7 +431,7 @@ function openModal(sel){$('#backdrop').classList.add('on');$(sel).classList.add(
 function closeModal(){$('#backdrop').classList.remove('on');$('#sheet').classList.remove('on');$('#setSheet').classList.remove('on');}
 $('#backdrop').onclick=closeModal;
 $('#addBtn').onclick=()=>openSheet(null);
-$('#setBtn').onclick=()=>{applyTheme();openModal('#setSheet');};
+$('#setBtn').onclick=()=>{applyTheme();initSyncUI();openModal('#setSheet');};
 
 $('#saveBtn').onclick=()=>{
   const amt=evalAmt($('#fAmt').value);
@@ -430,9 +442,9 @@ $('#saveBtn').onclick=()=>{
   else{items.push({id:Date.now(),amount:amt,cat:selCat,date,note});}
   LS.set('ledger_items',items);
   if(date.slice(0,7)!==curMonth)curMonth=date.slice(0,7);
-  closeModal();render();
+  closeModal();render();scheduleSync();
 };
-$('#delBtn').onclick=()=>{if(editId&&confirm('刪除這筆？')){items=items.filter(i=>i.id!==editId);LS.set('ledger_items',items);closeModal();render();}};
+$('#delBtn').onclick=()=>{if(editId&&confirm('刪除這筆？')){items=items.filter(i=>i.id!==editId);LS.set('ledger_items',items);closeModal();render();scheduleSync();}};
 
 /* backup */
 function download(name,obj){const b=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
@@ -440,9 +452,9 @@ function download(name,obj){const b=new Blob([JSON.stringify(obj,null,2)],{type:
 $('#expBtn').onclick=()=>download(`記帳備份_${todayStr()}.json`,{items});
 $('#impBtn').onclick=()=>$('#impFile').click();
 $('#impFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
-  r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d.items)){items=d.items;LS.set('ledger_items',items);closeModal();render();alert('匯入成功！');}}catch(err){alert('檔案格式不正確');}};
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d.items)){items=d.items;LS.set('ledger_items',items);closeModal();render();scheduleSync();alert('匯入成功！');}}catch(err){alert('檔案格式不正確');}};
   r.readAsText(f);e.target.value='';};
-$('#clrBtn').onclick=()=>{if(confirm('確定清空所有紀錄？無法復原')){items=[];LS.set('ledger_items',items);closeModal();render();}};
+$('#clrBtn').onclick=()=>{if(confirm('確定清空所有紀錄？無法復原')){items=[];LS.set('ledger_items',items);closeModal();render();scheduleSync();}};
 
 /* 報表：CSV + 可列印月報表 */
 function csvCell(s){s=(s==null?'':''+s);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
@@ -482,8 +494,29 @@ if(window.visualViewport){
   vv.addEventListener('resize',onVV); vv.addEventListener('scroll',onVV);
 }
 
+/* Google Sheet 同步（Apps Script：把全部資料鏡像到 Sheet） */
+let syncUrl=LS.get('ledger_syncurl','');
+let syncTimer=null;
+function setSyncStatus(t){const el=$('#syncStatus');if(el)el.textContent=t;}
+function initSyncUI(){const i=$('#syncUrl');if(i)i.value=syncUrl;setSyncStatus(syncUrl?'已設定 · 自動同步':'未設定');}
+function scheduleSync(){if(!syncUrl)return;clearTimeout(syncTimer);syncTimer=setTimeout(()=>syncNow(false),1500);}
+function syncNow(manual){
+  const inp=$('#syncUrl');const url=((inp&&inp.value.trim())||syncUrl);
+  if(!url){if(manual)alert('請先貼上 Apps Script 網址並按「儲存網址」');return;}
+  if(manual){syncUrl=url;LS.set('ledger_syncurl',syncUrl);}
+  setSyncStatus('同步中…');
+  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({items:items})})
+    .then(()=>{const t=new Date();LS.set('ledger_synced',t.getTime());setSyncStatus('已同步 '+t.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}));})
+    .catch(()=>setSyncStatus('同步失敗，請檢查網址/網路'));
+}
+if($('#syncSaveBtn')){
+  $('#syncSaveBtn').onclick=()=>{syncUrl=$('#syncUrl').value.trim();LS.set('ledger_syncurl',syncUrl);setSyncStatus(syncUrl?'已儲存 · 自動同步':'未設定');if(syncUrl)syncNow(false);};
+  $('#syncNowBtn').onclick=()=>syncNow(true);
+}
+
 applyTheme();render();
 </script>
+
 
 </body>
 </html>
