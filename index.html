@@ -327,6 +327,7 @@ let items=LS.get('ledger_items',[]);
 let trips=LS.get('ledger_trips',[]);
 let mode=LS.get('ledger_mode','daily');
 let curTrip=LS.get('ledger_curtrip','');
+let tripList=LS.get('ledger_triplist',['韓國','日本']);
 let lastCur=LS.get('ledger_lastcur','KRW');
 let curRate=null;
 const pad=n=>String(n).padStart(2,'0');
@@ -381,7 +382,7 @@ function renderDaily(){
 
 function renderChart(rows,map,valfn){
   const card=$('#chartCard');
-  if(!rows.length){card.hidden=true;return;} card.hidden=false;
+  if(!rows.length){card.style.display='none';return;} card.style.display='flex';
   const by={}; rows.forEach(x=>{by[x.cat]=(by[x.cat]||0)+valfn(x);});
   const total=rows.reduce((s,x)=>s+valfn(x),0)||1;
   const arr=Object.entries(by).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v);
@@ -500,6 +501,7 @@ $('#saveBtn').onclick=async ()=>{
     LS.set('ledger_trips',trips);
     lastCur=cur;LS.set('ledger_lastcur',cur);
     curTrip=trip;LS.set('ledger_curtrip',curTrip);
+    if(!tripList.includes(trip)){tripList.push(trip);LS.set('ledger_triplist',tripList);}
     closeModal();render();scheduleSync();return;
   }
   if(editId){const x=items.find(i=>i.id===editId);Object.assign(x,{amount:amt,cat:selCat,date,note});}
@@ -563,7 +565,8 @@ if(window.visualViewport){
 
 /* ===== 旅遊花費模式 ===== */
 function tripNames(){return [...new Set(trips.map(x=>x.trip).filter(Boolean))];}
-function updateTripDatalist(){const dl=$('#tripList');if(dl)dl.innerHTML=tripNames().map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');}
+function allTrips(){const s=tripList.slice();tripNames().forEach(n=>{if(!s.includes(n))s.push(n);});return s;}
+function updateTripDatalist(){const dl=$('#tripList');if(dl)dl.innerHTML=allTrips().map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');}
 function setMode(m){mode=m;LS.set('ledger_mode',m);
   document.body.classList.toggle('tmode',m==='travel');
   $('#modeSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
@@ -572,11 +575,11 @@ $('#modeSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>setMode(b.data
 $('#tripSel').onchange=()=>{curTrip=$('#tripSel').value;LS.set('ledger_curtrip',curTrip);render();};
 
 function renderTravel(){
-  const names=tripNames();
-  if(names.length && !names.includes(curTrip)) curTrip=names[names.length-1];
+  const names=allTrips();
+  if(!names.includes(curTrip)) curTrip=names[0]||'';
   const sel=$('#tripSel');
   sel.innerHTML = names.length ? names.map(n=>`<option${n===curTrip?' selected':''}>${escapeHtml(n)}</option>`).join('') : '<option>（尚無旅程）</option>';
-  const rows = trips.filter(x=>!curTrip||x.trip===curTrip);
+  const rows = trips.filter(x=>x.trip===curTrip);
   const total = rows.reduce((s,x)=>s+(x.twd||0),0);
   $('#mlabel').textContent='旅遊';
   $('#totalLbl').textContent = curTrip? `「${curTrip}」花費（台幣）` : '旅遊花費（台幣）';
