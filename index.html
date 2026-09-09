@@ -161,6 +161,18 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .set-item .sd{font-size:11.5px;color:var(--muted);}
 .set-item button{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;color:var(--text);}
 .hint{font-size:11.5px;color:var(--faint);margin-top:14px;text-align:center;}
+/* mode switch + travel */
+.modeseg{display:flex;gap:6px;background:var(--surface2);border:1px solid var(--line);border-radius:13px;padding:4px;margin:6px 0 14px;}
+.modeseg button{flex:1;padding:9px;border-radius:10px;font-size:14px;font-weight:700;color:var(--muted);}
+.modeseg button.on{background:var(--accent);color:var(--accent-ink);}
+.tripsel{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:12px;}
+.tripsel select{max-width:72%;background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:8px 12px;font-size:15px;font-weight:700;}
+.travel-only{display:none;}
+body.tmode .travel-only{display:flex;}
+body.tmode .month-nav{display:none;}
+.rcur{font-size:10.5px;color:var(--faint);font-weight:600;margin-left:6px;letter-spacing:.5px;}
+.ramt .twd{display:block;font-size:11px;color:var(--faint);font-weight:600;text-align:right;margin-top:1px;}
+.cursel,.tripinput{width:100%;min-width:0;background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:11px;padding:11px 12px;font-size:16px;-webkit-appearance:none;appearance:none;}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
 /* report */
 #reportView{position:fixed;inset:0;z-index:80;background:#fff;color:#1a1a1a;overflow:auto;display:none;
@@ -194,13 +206,22 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
     </div>
   </header>
 
+  <div class="modeseg" id="modeSeg">
+    <button data-m="daily" class="on">🧾 日常</button>
+    <button data-m="travel">✈️ 旅遊</button>
+  </div>
+
   <section class="summary card">
     <div class="month-nav">
       <button id="prevM" aria-label="上個月">‹</button>
       <div class="mlabel num" id="mlabel">—</div>
       <button id="nextM" aria-label="下個月">›</button>
     </div>
-    <div class="total-lbl">本月支出</div>
+    <div class="tripsel travel-only" id="tripNav">
+      <span class="total-lbl">旅程</span>
+      <select id="tripSel" aria-label="選擇旅程"></select>
+    </div>
+    <div class="total-lbl" id="totalLbl">本月支出</div>
     <div class="total"><span class="cur">NT$</span><span class="amt num" id="total">0</span></div>
     <div class="subline">
       <span id="count" class="num">0 筆</span>
@@ -228,10 +249,17 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
   <div class="grab"></div>
   <h2 id="sheetTitle">記一筆</h2>
   <div class="sheet-scroll">
-  <div class="amt-input"><span class="cur">NT$</span>
+  <div class="amt-input"><span class="cur" id="amtCur">NT$</span>
     <input id="fAmt" inputmode="decimal" placeholder="0" aria-label="金額">
     <button type="button" id="plusBtn" class="plusbtn" aria-label="繼續加一筆">＋</button></div>
   <div class="amt-eq" id="amtEq"></div>
+  <div class="frow travel-only">
+    <div class="field"><p class="flabel">旅程</p>
+      <input id="fTrip" list="tripList" class="tripinput" placeholder="例：首爾、紐西蘭" autocomplete="off">
+      <datalist id="tripList"></datalist></div>
+    <div class="field field-date"><p class="flabel">幣別</p>
+      <select id="fCur" class="cursel"></select></div>
+  </div>
   <p class="flabel">分類</p>
   <div class="chips" id="chips"></div>
   <div class="frow">
@@ -285,8 +313,22 @@ const CATS=[
  {k:'房租',e:'🔑',c:'--c-rent'},{k:'學貸',e:'🎓',c:'--c-loan'},{k:'孝親費',e:'🧧',c:'--c-parent'},
  {k:'其他',e:'🧾',c:'--c-other'}];
 const catMap=Object.fromEntries(CATS.map(c=>[c.k,c]));
+/* 旅遊花費分類（對應 Excel 類別）+ 幣別 */
+const TCATS=[
+ {k:'交通',e:'🚕',c:'--c-transit'},{k:'餐飲',e:'🍽️',c:'--c-food'},{k:'門票/景點',e:'🎟️',c:'--c-fun'},
+ {k:'購物',e:'🛍️',c:'--c-shop'},{k:'便利商店/零食',e:'🏪',c:'--c-bill'},{k:'其他',e:'🧾',c:'--c-other'}];
+const tcatMap=Object.fromEntries(TCATS.map(c=>[c.k,c]));
+const CURS=[['TWD','台幣','NT$'],['KRW','韓元','₩'],['JPY','日圓','¥'],['NZD','紐幣','NZ$'],['USD','美元','US$'],
+ ['EUR','歐元','€'],['THB','泰銖','฿'],['VND','越南盾','₫'],['SGD','新加坡幣','S$'],['HKD','港幣','HK$'],
+ ['CNY','人民幣','¥'],['MYR','馬幣','RM'],['AUD','澳幣','A$'],['GBP','英鎊','£'],['PHP','披索','₱'],['IDR','印尼盾','Rp']];
+const curMap=Object.fromEntries(CURS.map(c=>[c[0],{name:c[1],sym:c[2]}]));
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 let items=LS.get('ledger_items',[]);
+let trips=LS.get('ledger_trips',[]);
+let mode=LS.get('ledger_mode','daily');
+let curTrip=LS.get('ledger_curtrip','');
+let lastCur=LS.get('ledger_lastcur','KRW');
+let curRate=null;
 const pad=n=>String(n).padStart(2,'0');
 const dstr=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());   // 本地日期 YYYY-MM-DD
 const mstr=d=>d.getFullYear()+'-'+pad(d.getMonth()+1);                        // 本地月份 YYYY-MM
@@ -313,7 +355,8 @@ $('#prevM').onclick=()=>shiftMonth(-1); $('#nextM').onclick=()=>shiftMonth(1);
 
 /* render */
 function monthItems(){return items.filter(x=>x.date.slice(0,7)===curMonth);}
-function render(){
+function render(){ if(mode==='travel') return renderTravel(); renderDaily(); }
+function renderDaily(){
   const [y,m]=curMonth.split('-');
   $('#mlabel').textContent=`${y} / ${m}`;
   const mi=monthItems();
@@ -332,15 +375,15 @@ function render(){
   if(pt>0&&total>0){const diff=(total-pt)/pt*100;de.className='delta '+(diff>=0?'up':'down');
     de.textContent=`${diff>=0?'▲':'▼'} ${Math.abs(diff).toFixed(0)}% 上月`;de.hidden=false;}
   else{de.textContent='';de.className='delta';}
-  renderChart(mi);
+  renderChart(mi,catMap,x=>x.amount);
   renderList(mi);
 }
 
-function renderChart(mi){
+function renderChart(rows,map,valfn){
   const card=$('#chartCard');
-  if(!mi.length){card.hidden=true;return;} card.hidden=false;
-  const by={}; mi.forEach(x=>by[x.cat]=(by[x.cat]||0)+x.amount);
-  const total=mi.reduce((s,x)=>s+x.amount,0);
+  if(!rows.length){card.hidden=true;return;} card.hidden=false;
+  const by={}; rows.forEach(x=>{by[x.cat]=(by[x.cat]||0)+valfn(x);});
+  const total=rows.reduce((s,x)=>s+valfn(x),0)||1;
   const arr=Object.entries(by).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v);
   // donut
   const svg=$('#donut'); svg.innerHTML='';
@@ -354,16 +397,16 @@ function renderChart(mi){
     const frac=s.v/total, len=frac*C;
     const seg=document.createElementNS('http://www.w3.org/2000/svg','circle');
     seg.setAttribute('cx',cx);seg.setAttribute('cy',cy);seg.setAttribute('r',r);
-    seg.setAttribute('fill','none');seg.setAttribute('stroke',cssv((catMap[s.k]||{c:'--c-other'}).c));
+    seg.setAttribute('fill','none');seg.setAttribute('stroke',cssv((map[s.k]||{c:'--c-other'}).c));
     seg.setAttribute('stroke-width','5');seg.setAttribute('stroke-dasharray',`${len} ${C-len}`);
     seg.setAttribute('stroke-dashoffset',`${-off}`);
     seg.setAttribute('transform',`rotate(-90 ${cx} ${cy})`);
     svg.appendChild(seg); off+=len;
   });
-  $('#dcNum').textContent=mi.length;
+  $('#dcNum').textContent=rows.length;
   // legend
   const leg=$('#legend'); leg.innerHTML='';
-  arr.forEach(s=>{const cm=catMap[s.k]||{e:'🧾',c:'--c-other'};
+  arr.forEach(s=>{const cm=map[s.k]||{e:'🧾',c:'--c-other'};
     const el=document.createElement('div');el.className='leg';
     el.innerHTML=`<span class="dot" style="background:var(${cm.c})"></span>
       <span class="lname">${cm.e} ${s.k}</span>
@@ -403,7 +446,7 @@ function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>
 /* sheet */
 let selCat=null;
 function buildChips(){const box=$('#chips');box.innerHTML='';
-  CATS.forEach(c=>{const b=document.createElement('button');b.className='chip';b.dataset.k=c.k;
+  (mode==='travel'?TCATS:CATS).forEach(c=>{const b=document.createElement('button');b.className='chip';b.dataset.k=c.k;
     b.innerHTML=`<span class="ce">${c.e}</span>${c.k}`;
     b.onclick=()=>{selCat=c.k;box.querySelectorAll('.chip').forEach(x=>x.classList.toggle('sel',x.dataset.k===c.k));};
     box.appendChild(b);});}
@@ -414,17 +457,25 @@ function setChip(k){selCat=k;$('#chips').querySelectorAll('.chip').forEach(x=>x.
 function evalAmt(str){if(str==null)return NaN;let s=(''+str).replace(/[^0-9.+\-*/()]/g,'').replace(/[+\-*/.]+$/,'');
   if(!s)return NaN;try{const v=Function('"use strict";return('+s+')')();return (typeof v==='number'&&isFinite(v))?v:NaN;}catch(e){return NaN;}}
 function updateEq(){const raw=$('#fAmt').value;const v=evalAmt(raw);
+  if(mode==='travel'){updateTravelEq(v);return;}
   if(/\d\s*[+\-*/]/.test(raw)&&!isNaN(v)){$('#amtEq').textContent='＝ NT$ '+fmt(v);$('#amtEq').style.display='block';}
   else $('#amtEq').style.display='none';}
 $('#fAmt').addEventListener('input',updateEq);
 $('#plusBtn').onclick=()=>{let v=$('#fAmt').value.trim();if(v&&!/[+\-*/]$/.test(v))$('#fAmt').value=v+'+';updateEq();$('#fAmt').focus();};
 
 function openSheet(id){
+  buildChips();
+  const travel=(mode==='travel');
   editId=id||null;
-  if(id){const x=items.find(i=>i.id===id);$('#sheetTitle').textContent='編輯';
-    $('#fAmt').value=x.amount;setChip(x.cat);$('#fDate').value=x.date;$('#fNote').value=x.note||'';$('#delBtn').hidden=false;}
-  else{$('#sheetTitle').textContent='記一筆';$('#fAmt').value='';setChip(null);selCat=null;
-    $('#fDate').value=todayStr();$('#fNote').value='';$('#delBtn').hidden=true;}
+  const arr=travel?trips:items;
+  if(id){const x=arr.find(i=>i.id===id);$('#sheetTitle').textContent='編輯';
+    $('#fAmt').value=x.amount;setChip(x.cat);$('#fDate').value=x.date;$('#fNote').value=x.note||'';$('#delBtn').hidden=false;
+    if(travel){$('#fTrip').value=x.trip||'';$('#fCur').value=x.cur||lastCur;}}
+  else{$('#sheetTitle').textContent=travel?'記一筆旅遊花費':'記一筆';$('#fAmt').value='';setChip(null);selCat=null;
+    $('#fDate').value=todayStr();$('#fNote').value='';$('#delBtn').hidden=true;
+    if(travel){$('#fTrip').value=curTrip||'';$('#fCur').value=lastCur;}}
+  if(travel){updateTripDatalist();$('#amtCur').textContent=(curMap[$('#fCur').value]||{sym:'NT$'}).sym;}
+  else{$('#amtCur').textContent='NT$';}
   updateEq();openModal('#sheet');setTimeout(()=>$('#fAmt').focus(),260);
 }
 function openModal(sel){$('#backdrop').classList.add('on');$(sel).classList.add('on');}
@@ -433,18 +484,34 @@ $('#backdrop').onclick=closeModal;
 $('#addBtn').onclick=()=>openSheet(null);
 $('#setBtn').onclick=()=>{applyTheme();initSyncUI();openModal('#setSheet');};
 
-$('#saveBtn').onclick=()=>{
+$('#saveBtn').onclick=async ()=>{
   const amt=evalAmt($('#fAmt').value);
   if(!amt||amt<=0||isNaN(amt)){$('#fAmt').focus();return;}
   if(!selCat){alert('請選一個分類');return;}
   const date=$('#fDate').value||todayStr(), note=$('#fNote').value.trim();
+  if(mode==='travel'){
+    const trip=$('#fTrip').value.trim(), cur=$('#fCur').value;
+    if(!trip){alert('請輸入旅程名稱');$('#fTrip').focus();return;}
+    let rate=curRate; if(!rate)rate=await getRate(cur);
+    const prev=editId?trips.find(i=>i.id===editId):null;
+    const twd=rate?Math.round(amt*rate):(prev?prev.twd||0:0);
+    if(editId&&prev){Object.assign(prev,{amount:amt,cat:selCat,date,note,trip,cur,twd});}
+    else{trips.push({id:Date.now(),amount:amt,cat:selCat,date,note,trip,cur,twd});}
+    LS.set('ledger_trips',trips);
+    lastCur=cur;LS.set('ledger_lastcur',cur);
+    curTrip=trip;LS.set('ledger_curtrip',curTrip);
+    closeModal();render();scheduleSync();return;
+  }
   if(editId){const x=items.find(i=>i.id===editId);Object.assign(x,{amount:amt,cat:selCat,date,note});}
   else{items.push({id:Date.now(),amount:amt,cat:selCat,date,note});}
   LS.set('ledger_items',items);
   if(date.slice(0,7)!==curMonth)curMonth=date.slice(0,7);
   closeModal();render();scheduleSync();
 };
-$('#delBtn').onclick=()=>{if(editId&&confirm('刪除這筆？')){items=items.filter(i=>i.id!==editId);LS.set('ledger_items',items);closeModal();render();scheduleSync();}};
+$('#delBtn').onclick=()=>{if(!editId)return;if(!confirm('刪除這筆？'))return;
+  if(mode==='travel'){trips=trips.filter(i=>i.id!==editId);LS.set('ledger_trips',trips);}
+  else{items=items.filter(i=>i.id!==editId);LS.set('ledger_items',items);}
+  closeModal();render();scheduleSync();};
 
 /* backup */
 function download(name,obj){const b=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
@@ -494,6 +561,72 @@ if(window.visualViewport){
   vv.addEventListener('resize',onVV); vv.addEventListener('scroll',onVV);
 }
 
+/* ===== 旅遊花費模式 ===== */
+function tripNames(){return [...new Set(trips.map(x=>x.trip).filter(Boolean))];}
+function updateTripDatalist(){const dl=$('#tripList');if(dl)dl.innerHTML=tripNames().map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');}
+function setMode(m){mode=m;LS.set('ledger_mode',m);
+  document.body.classList.toggle('tmode',m==='travel');
+  $('#modeSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+  render();}
+$('#modeSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+$('#tripSel').onchange=()=>{curTrip=$('#tripSel').value;LS.set('ledger_curtrip',curTrip);render();};
+
+function renderTravel(){
+  const names=tripNames();
+  if(names.length && !names.includes(curTrip)) curTrip=names[names.length-1];
+  const sel=$('#tripSel');
+  sel.innerHTML = names.length ? names.map(n=>`<option${n===curTrip?' selected':''}>${escapeHtml(n)}</option>`).join('') : '<option>（尚無旅程）</option>';
+  const rows = trips.filter(x=>!curTrip||x.trip===curTrip);
+  const total = rows.reduce((s,x)=>s+(x.twd||0),0);
+  $('#mlabel').textContent='旅遊';
+  $('#totalLbl').textContent = curTrip? `「${curTrip}」花費（台幣）` : '旅遊花費（台幣）';
+  $('#total').textContent = fmt(total);
+  $('#count').textContent = `${rows.length} 筆`;
+  $('#avg').textContent='·'; const de=$('#delta'); de.textContent=''; de.className='delta';
+  renderChart(rows,tcatMap,x=>x.twd||0);
+  renderTravelList(rows);
+}
+function renderTravelList(rows){
+  const list=$('#list');
+  if(!rows.length){list.innerHTML=`<div class="empty"><div class="big">✈️</div>還沒有旅遊花費<br>點右下角 ＋ 開始記錄</div>`;return;}
+  const byDay={}; rows.forEach(x=>(byDay[x.date]=byDay[x.date]||[]).push(x));
+  const days=Object.keys(byDay).sort().reverse(); let h='';
+  days.forEach(ds=>{
+    const rs=byDay[ds].sort((a,b)=>b.id-a.id);
+    const dsum=rs.reduce((s,x)=>s+(x.twd||0),0);
+    h+=`<div class="daygroup"><div class="dayhead"><span>${dayLabel(ds)}</span><span class="dsum num">NT$ ${fmt(dsum)}</span></div>`;
+    rs.forEach(x=>{const cm=tcatMap[x.cat]||{e:'🧾',c:'--c-other'};const sym=(curMap[x.cur]||{sym:x.cur}).sym;
+      h+=`<button class="row" data-id="${x.id}">
+        <span class="ic" style="background:var(${cm.c})22;color:var(${cm.c})">${cm.e}</span>
+        <span class="rmid"><div class="rcat">${x.cat}<span class="rcur">${x.cur}</span></div>${x.note?`<div class="rnote">${escapeHtml(x.note)}</div>`:''}</span>
+        <span class="ramt num">${sym} ${fmt(x.amount)}<span class="twd">≈ NT$ ${fmt(x.twd||0)}</span></span></button>`;});
+    h+=`</div>`;
+  });
+  list.innerHTML=h;
+  list.querySelectorAll('.row').forEach(r=>r.onclick=()=>openSheet(+r.dataset.id));
+}
+/* 即時匯率：GitHub Pages 可直接抓（快取 6 小時）；抓不到仍可存，Sheet 端用 GOOGLEFINANCE 換算 */
+async function getRate(cur){
+  if(!cur||cur==='TWD')return 1;
+  const c=LS.get('rate_'+cur,null), now=Date.now();
+  if(c&&(now-c.ts)<6*3600*1000)return c.rate;
+  try{const r=await fetch('https://open.er-api.com/v6/latest/'+cur);const j=await r.json();
+    const rate=j&&j.rates&&j.rates.TWD; if(rate){LS.set('rate_'+cur,{rate,ts:now});return rate;}}catch(e){}
+  return c?c.rate:null;
+}
+async function updateTravelEq(v){
+  const cur=$('#fCur').value; $('#amtCur').textContent=(curMap[cur]||{sym:cur}).sym;
+  const eq=$('#amtEq');
+  if(isNaN(v)||v<=0){eq.style.display='none';curRate=null;return;}
+  const rate=await getRate(cur);
+  if(rate){curRate=rate; eq.textContent=`≈ NT$ ${fmt(v*rate)}　(1 ${cur} = NT$ ${(+rate).toPrecision(3)})`;}
+  else{curRate=null; eq.textContent='匯率載入中／離線，仍可先儲存（Sheet 會即時換算）';}
+  eq.style.display='block';
+}
+function buildCurSel(){const s=$('#fCur');if(s)s.innerHTML=CURS.map(c=>`<option value="${c[0]}">${c[2]}　${c[0]} · ${c[1]}</option>`).join('');}
+buildCurSel();
+if($('#fCur'))$('#fCur').onchange=()=>{lastCur=$('#fCur').value;LS.set('ledger_lastcur',lastCur);updateEq();};
+
 /* Google Sheet 同步（Apps Script：把全部資料鏡像到 Sheet） */
 let syncUrl=LS.get('ledger_syncurl','');
 let syncTimer=null;
@@ -505,7 +638,7 @@ function syncNow(manual){
   if(!url){if(manual)alert('請先貼上 Apps Script 網址並按「儲存網址」');return;}
   if(manual){syncUrl=url;LS.set('ledger_syncurl',syncUrl);}
   setSyncStatus('同步中…');
-  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({items:items})})
+  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({items:items,trips:trips})})
     .then(()=>{const t=new Date();LS.set('ledger_synced',t.getTime());setSyncStatus('已同步 '+t.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}));})
     .catch(()=>setSyncStatus('同步失敗，請檢查網址/網路'));
 }
@@ -514,7 +647,7 @@ if($('#syncSaveBtn')){
   $('#syncNowBtn').onclick=()=>syncNow(true);
 }
 
-applyTheme();render();
+applyTheme();setMode(mode);
 </script>
 
 
