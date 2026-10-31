@@ -21,7 +21,7 @@ var TABS = {
   bills:   '信用卡繳款',
   accounts:'帳戶設定',
   cards:   '卡片額度',
-  loans:   '學貸進度',
+  loans:   '學貸剩餘',
   summary: '月結摘要',
   meta:    '同步狀態'
 };
@@ -152,10 +152,11 @@ function writeTrips_(ss, d) {
 function writeTpls_(ss, d) {
   var rows = (d.tpls || []).map(function (t) {
     return [t.id, t.n, Number(t.amt) || 0, t.cat, '永豐大戶',
-            accName_(d, t.to), Number(t.day) || 1, t.on ? '啟用' : '停用'];
+            accName_(d, t.to), Number(t.day) || 1,
+            t.auto ? '自動記入' : '手動轉出', t.on ? '啟用' : '停用'];
   });
   dump_(ss, TABS.tpls,
-    ['樣板id', '項目', '每月金額', '分類', '轉出帳戶', '轉入帳戶', '執行日', '狀態'],
+    ['樣板id', '項目', '每月金額', '分類', '轉出帳戶', '轉入帳戶', '執行日', '記入方式', '狀態'],
     rows, {money: [3]});
 }
 
@@ -222,20 +223,19 @@ function writeCards_(ss, d) {
     rows, {money: [4, 5, 6], pct: [7]});
 }
 
-/** 學貸進度 */
+/** 學貸剩餘 */
 function writeLoans_(ss, d) {
   var loans = d.loans || {};
   var rows = Object.keys(loans).map(function (k) {
     var L = loans[k];
     return [k, L.n, accName_(d, L.acc), L.snapDate, Number(L.snapBal) || 0,
-            Number(L.principal) || 0, Number(L.monthly) || 0, Number(L.debitDay) || '',
-            Number(L.left) || 0, Number(L.paid) || 0,
-            (Number(L.pct) || 0) / 100, Number(L.monthsLeft) || 0, L.estDone || ''];
+            Number(L.monthly) || 0, Number(L.debitDay) || '',
+            Number(L.left) || 0, Number(L.monthsLeft) || 0, L.estDone || ''];
   });
   dump_(ss, TABS.loans,
-    ['代碼', '貸款', '扣款帳戶', '餘額快照日', '快照餘額', '原始本金', '每月還款',
-     '扣款日', '目前剩餘', '已還金額', '已還比例', '剩餘期數', '預估清償'],
-    rows, {money: [5, 6, 7, 9, 10], pct: [11], date: [4]});
+    ['代碼', '貸款', '扣款帳戶', '餘額快照日', '快照餘額', '每月還款',
+     '扣款日', '目前剩餘', '剩餘期數', '預估清償'],
+    rows, {money: [5, 6, 8], date: [4]});
 }
 
 /** 月結摘要：每月一列，分類小計 + 大戶結餘。拿來畫圖表最方便 */
