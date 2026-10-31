@@ -14,6 +14,12 @@
  *       要加公式／圖表請另開工作表用 QUERY／IMPORTRANGE 參照。
  */
 
+/* 這些分類一律不計入「已花費」，與 App 的 EX_CATS 必須一致 */
+var EX_CATS = ['房租', '學貸', '帳單', '孝親費'];
+function inBudget_(x) {
+  return EX_CATS.indexOf(x.cat) === -1 && !x.ex;
+}
+
 var TABS = {
   items:   '支出明細',
   trips:   '旅遊花費紀錄',
@@ -127,7 +133,7 @@ function writeItems_(ss, d) {
       x.pay || '',
       x.note || '',
       x.auto ? '固定轉帳' : '手動',
-      x.ex ? '否' : '是',
+      inBudget_(x) ? '是' : '否',
       x.auto || ''
     ];
   });

@@ -170,6 +170,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .exbtn .extxt b{display:block;font-size:12.5px;font-weight:700;color:var(--muted);}
 .exbtn .extxt small{display:block;font-size:10.5px;color:var(--faint);line-height:1.3;}
 .exbtn.on{border-color:var(--accent);background:var(--accent-soft);}
+.exbtn.locked{opacity:.75;}
+.chip .cx{display:block;font-size:8.5px;line-height:1.1;color:var(--accent);font-weight:700;margin-top:1px;}
 .exbtn.on .exbox{background:var(--accent);border-color:var(--accent);}
 .exbtn.on .extxt b{color:var(--text);}
 .frow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
@@ -447,6 +449,14 @@ const CATS=[
  {k:'現金提領',e:'🏧',c:'--c-cash'},
  {k:'其他',   e:'🧾',c:'--c-other'}];
 const catMap=Object.fromEntries(CATS.map(c=>[c.k,c]));
+/* 這些分類一律不計入「本月已花費」—— 都是固定／必要支出，
+   本月預算要反映的是扣掉它們之後、可以自由花的錢。
+   不在這份名單但仍要排除的（例：0050 投資，分類是「其他」），
+   用每筆紀錄的「不計入本月預算」勾選或固定轉帳樣板的 ex 處理。 */
+const EX_CATS=['房租','學貸','帳單','孝親費'];
+const catExcluded=c=>EX_CATS.includes(c);
+/* 一筆紀錄要不要算進已花費 */
+const inBudget=x=>!catExcluded(x.cat)&&!x.ex;
 /* 已移除的舊分類 → 併入「其他」，原分類寫進備註 */
 const DROPPED=['交通','購物','娛樂','居家','醫療','教育'];
 
@@ -754,7 +764,7 @@ function renderList(mi){
       const pn=x.auto?'固定':(payMap[x.pay]?payMap[x.pay].n:'');
       h+=`<button class="row" data-id="${x.id}">
         <span class="ic" style="background:var(${cm.c})22;color:var(${cm.c})">${cm.e}</span>
-        <span class="rmid"><div class="rcat">${escapeHtml(x.cat)}${pn?`<span class="ptag${x.auto?' auto':''}">${pn}</span>`:''}${x.ex?`<span class="ptag">不計預算</span>`:''}</div>${x.note?`<div class="rnote">${escapeHtml(x.note)}</div>`:''}</span>
+        <span class="rmid"><div class="rcat">${escapeHtml(x.cat)}${pn?`<span class="ptag${x.auto?' auto':''}">${pn}</span>`:''}${!inBudget(x)?`<span class="ptag">不計預算</span>`:''}</div>${x.note?`<div class="rnote">${escapeHtml(x.note)}</div>`:''}</span>
         <span class="ramt num">${fmt(x.amount)}</span></button>`;});
     h+=`</div>`;
   });
@@ -777,10 +787,10 @@ function cardUsed(ym,cardKey){
 }
 /* 本月直接從大戶出去的錢（固定轉帳、現金提領、其他大戶扣款） */
 function dawhoOut(ym){return monthItems(ym).filter(x=>x.pay==='dawho').reduce((s,x)=>s+x.amount,0);}
-/* 本月已花費＝日常 tab 的本月總額，扣掉標記「不計入預算」的（例如台北房租） */
-function spent(ym){return monthItems(ym).filter(x=>!x.ex).reduce((s,x)=>s+x.amount,0);}
-function exCount(ym){return monthItems(ym).filter(x=>x.ex).length;}
-function exTotal(ym){return monthItems(ym).filter(x=>x.ex).reduce((s,x)=>s+x.amount,0);}
+/* 本月已花費＝日常 tab 本月總額，扣掉「分類屬於固定支出」或手動勾選不計入的 */
+function spent(ym){return monthItems(ym).filter(inBudget).reduce((s,x)=>s+x.amount,0);}
+function exCount(ym){return monthItems(ym).filter(x=>!inBudget(x)).length;}
+function exTotal(ym){return monthItems(ym).filter(x=>!inBudget(x)).reduce((s,x)=>s+x.amount,0);}
 function billTotal(ym){const b=monthBills(ym);return CARDS.reduce((s,c)=>s+(+b[c.k].amt||0),0);}
 function billPaid(ym){const b=monthBills(ym);return CARDS.reduce((s,c)=>s+(b[c.k].paid?(+b[c.k].amt||0):0),0);}
 
@@ -880,7 +890,7 @@ function renderFin(){
         <div class="bl sum${left<0?' neg':''}"><span>剩餘預算</span><b class="num">NT$ ${fmt(left)}</b></div>
       </div>
     </div>
-    <div class="exnote">已花費＝日常 tab 本月總額扣掉「不計入預算」的部分。${exN?`本月已排除 ${exN} 筆共 ${fmt(exA)} 元（固定轉帳與手動勾選的）。`:'本月沒有排除任何一筆。'}</div>
+    <div class="exnote">不計入預算的分類：${EX_CATS.join('、')}（加上手動勾選的）。${exN?`本月已排除 ${exN} 筆共 ${fmt(exA)} 元。`:'本月沒有排除任何一筆。'}</div>
     ${budget<=0?`<div class="warn">⚠️ 還沒設定本月預算，水位無法計算。點上面的金額輸入。</div>`:''}
     ${left<0?`<div class="warn">⚠️ 已超出預算 NT$ ${fmt(-left)}。</div>`:''}
     ${unspecified?`<div class="warn">⚠️ 本月有 ${unspecified} 筆紀錄沒有支付方式（舊資料），不會算進信用卡額度。點該筆紀錄補上即可。</div>`:''}
@@ -1056,18 +1066,28 @@ $('#tplDone').onclick=closeModal;
 let selCat=null, selPay=lastPay;
 function buildChips(){const box=$('#chips');box.innerHTML='';
   (mode==='travel'?TCATS:CATS).forEach(c=>{const b=document.createElement('button');b.className='chip';b.dataset.k=c.k;
-    b.innerHTML=`<span class="ce">${c.e}</span>${escapeHtml(c.k)}`;
+    b.innerHTML=`<span class="ce">${c.e}</span>${escapeHtml(c.k)}${(mode!=='travel'&&catExcluded(c.k))?'<span class="cx">不計預算</span>':''}`;
     b.onclick=()=>{setChip(c.k);if(c.k==='現金提領')setPay('dawho');};
     box.appendChild(b);});}
 function buildPays(){const box=$('#pays');box.innerHTML='';
   PAYS.forEach(p=>{const b=document.createElement('button');b.className='pay';b.dataset.k=p.k;
     b.textContent=p.n;b.onclick=()=>setPay(p.k);box.appendChild(b);});}
-function setChip(k){selCat=k;$('#chips').querySelectorAll('.chip').forEach(x=>x.classList.toggle('sel',x.dataset.k===k));}
+function setChip(k){selCat=k;$('#chips').querySelectorAll('.chip').forEach(x=>x.classList.toggle('sel',x.dataset.k===k));
+  if(mode!=='travel')syncExUI();}
 function setPay(k){selPay=k;$('#pays').querySelectorAll('.pay').forEach(x=>x.classList.toggle('sel',x.dataset.k===k));}
 let selEx=false;
-function setEx(v){selEx=!!v;const b=$('#fEx');b.classList.toggle('on',selEx);
-  b.querySelector('.exbox').textContent=selEx?'✓':'　';}
-$('#fEx').onclick=()=>setEx(!selEx);
+function syncExUI(){
+  const b=$('#fEx'), locked=catExcluded(selCat);
+  const on=locked||selEx;
+  b.classList.toggle('on',on);
+  b.classList.toggle('locked',locked);
+  b.querySelector('.exbox').textContent=on?'✓':'　';
+  b.querySelector('.extxt').innerHTML=locked
+    ? `<b>不計入本月預算</b><small>「${escapeHtml(selCat)}」這個分類一律不計入，不用另外勾</small>`
+    : `<b>不計入本月預算</b><small>仍會記在日常明細，但不算進「已花費」（例：0050 定期定額）</small>`;
+}
+function setEx(v){selEx=!!v;syncExUI();}
+$('#fEx').onclick=()=>{if(catExcluded(selCat))return;setEx(!selEx);};
 buildChips();buildPays();
 
 /* 金額欄＝小計算機：支援 100+50+30、按＋連加，即時顯示合計 */
