@@ -128,6 +128,14 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .sheet.on{transform:translateX(-50%) translateY(0);}
 .grab{width:38px;height:4px;border-radius:2px;background:var(--line);margin:6px auto 12px;}
 .sheet h2{font-size:16px;margin:0 0 14px;font-weight:800;}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
+.sheet-head h2{margin:0;}
+.closebtn{flex:0 0 auto;width:34px;height:34px;border-radius:10px;background:var(--surface2);
+  border:1px solid var(--line);color:var(--muted);font-size:15px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;}
+.closebtn:active{transform:scale(.92);}
+.sheet-done{width:100%;background:var(--surface2);border:1px solid var(--line);color:var(--text);
+  border-radius:13px;padding:13px;font-size:15px;font-weight:800;margin-top:10px;}
 
 /* ── 記帳表單：緊湊版（金額不再被壓縮） ── */
 #sheet{display:flex;flex-direction:column;padding:8px 0 0;max-height:90vh;}
@@ -155,6 +163,15 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .pay{padding:7px 3px;border-radius:10px;background:var(--surface2);border:1.5px solid transparent;
   font-size:11.5px;font-weight:600;color:var(--muted);text-align:center;}
 .pay.sel{border-color:var(--accent);background:var(--accent-soft);color:var(--text);font-weight:800;}
+.exbtn{display:flex;align-items:center;gap:9px;width:100%;text-align:left;margin-bottom:12px;
+  padding:9px 10px;border-radius:11px;background:var(--surface2);border:1.5px solid transparent;}
+.exbtn .exbox{flex:0 0 auto;width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line);
+  background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;}
+.exbtn .extxt b{display:block;font-size:12.5px;font-weight:700;color:var(--muted);}
+.exbtn .extxt small{display:block;font-size:10.5px;color:var(--faint);line-height:1.3;}
+.exbtn.on{border-color:var(--accent);background:var(--accent-soft);}
+.exbtn.on .exbox{background:var(--accent);border-color:var(--accent);}
+.exbtn.on .extxt b{color:var(--text);}
 .frow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
 .field{flex:1 1 150px;min-width:0;}
 .field-date{flex:0 0 156px;}
@@ -229,6 +246,7 @@ body.fmode .fab,body.fmode #chartCard,body.fmode #list{display:none!important;}
 .bl.sum b{font-size:18px;font-weight:800;}
 .editnum{border-bottom:1px dashed var(--accent);color:var(--accent);font-weight:700;}
 
+.exnote{font-size:10.5px;color:var(--faint);margin-top:9px;line-height:1.45;}
 .pb{margin-bottom:11px;}
 .pb:last-child{margin-bottom:0;}
 .pbh{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:5px;gap:8px;}
@@ -351,6 +369,10 @@ body.fmode .fab,body.fmode #chartCard,body.fmode #list{display:none!important;}
     <div class="field field-date"><p class="flabel">日期</p><input id="fDate" type="date"></div>
     <div class="field"><p class="flabel">備註（可留空）</p><input id="fNote" placeholder="例：午餐"></div>
   </div>
+  <button type="button" class="exbtn daily-only" id="fEx">
+    <span class="exbox">　</span>
+    <span class="extxt"><b>不計入本月預算</b><small>仍會記在日常明細，但不算進「已花費」（例：台北房租）</small></span>
+  </button>
   </div>
   <div class="sheet-foot">
   <button class="save" id="saveBtn">儲存</button>
@@ -358,13 +380,13 @@ body.fmode .fab,body.fmode #chartCard,body.fmode #list{display:none!important;}
   </div>
 </div>
 
-<!-- 本月薪水 -->
-<div class="sheet" id="salSheet" role="dialog" aria-modal="true" aria-label="本月薪水">
+<!-- 本月預算 -->
+<div class="sheet" id="salSheet" role="dialog" aria-modal="true" aria-label="本月預算">
   <div class="grab"></div>
-  <h2 id="salTitle">本月薪水</h2>
-  <p class="flabel" id="salHint">作為「永豐大戶可花費水位」的計算基準</p>
+  <h2 id="salTitle">本月預算</h2>
+  <p class="flabel" id="salHint">作為本月預算水位的基準。已花費＝日常 tab 的本月總額。</p>
   <div class="amt-input"><span class="cur">NT$</span>
-    <input id="fSal" inputmode="decimal" placeholder="0" aria-label="薪水"></div>
+    <input id="fSal" inputmode="decimal" placeholder="0" aria-label="預算"></div>
   <button class="save" id="salSave">儲存</button>
   <button class="del" id="salSkip">先跳過</button>
 </div>
@@ -372,11 +394,12 @@ body.fmode .fab,body.fmode #chartCard,body.fmode #list{display:none!important;}
 <!-- 固定轉帳設定 -->
 <div class="sheet" id="tplSheet" role="dialog" aria-modal="true" aria-label="固定轉帳設定">
   <div class="grab"></div>
-  <h2>固定轉帳設定</h2>
+  <div class="sheet-head"><h2>固定轉帳設定</h2><button class="closebtn" id="tplClose" aria-label="關閉">✕</button></div>
   <p class="flabel">全部由「永豐大戶」轉出。標「自動記入」的，切換到該月份時會自動記一筆（不會重複）；
     標「手動轉出」的只會出現在轉帳紀錄的快捷鍵，轉完後自己點一下。</p>
   <div id="tplList"></div>
   <button class="save" id="tplAdd" style="margin-top:12px">＋ 新增一項固定轉帳</button>
+  <button class="sheet-done" id="tplDone">完成，返回</button>
   <p class="hint">停用某項後，之後的月份就不會再自動記入。</p>
 </div>
 
@@ -453,8 +476,11 @@ const CARDS=[
  {k:'cathay', n:'國泰卡',payFrom:'cathay'},
  {k:'taishin',n:'台新卡',payFrom:'richart'}];
 
+/* 設定版號：升版時把既有使用者的舊預設值帶到新值（只改沒被手動編輯過的） */
+const CFG_VER=2;
 /* 預設設定（都可在 App 內改：額度會調整，隨時用「設定扣款日 / 額度」更新） */
 const DEF_CFG={
+  ver:CFG_VER,
   limits:{sinopac:100000,fubon:250000,cathay:100000,taishin:150000},
   cardDays:{
     sinopac:{by:0, debit:27},   // 永豐卡：直接從大戶扣，27 號
@@ -463,7 +489,7 @@ const DEF_CFG={
     taishin:{by:21,debit:22}    // 最慢 21 號轉進 Richart，22 號扣款
   },
   loans:{
-    fubon:{n:'富邦學貸',acc:'fubon',snapDate:'2026-10-31',snapBal:109462,monthly:3406,debitDay:1},
+    fubon:{n:'富邦學貸',acc:'fubon',snapDate:'2026-10-31',snapBal:109462,monthly:3353,debitDay:1},
     bot:  {n:'台銀學貸',acc:'bot',  snapDate:'2026-10-31',snapBal:183587,monthly:3012,debitDay:12}
   }
 };
@@ -474,7 +500,7 @@ const DEF_TPLS=[
  {id:'t_bot',    n:'台銀學貸', amt:3012, cat:'學貸',  to:'bot',   day:1,  on:true, auto:true},
  {id:'t_fubon',  n:'富邦學貸', amt:3406, cat:'學貸',  to:'fubon', day:31, on:true, auto:true},
  {id:'t_rent_tc',n:'台中房租', amt:7500, cat:'房租',  to:'',      day:9,  on:true, auto:true},
- {id:'t_rent_tp',n:'台北房租', amt:15000,cat:'房租',  to:'',      day:1,  on:true, auto:false}, // 手動轉出
+ {id:'t_0050',   n:'0050 股票買入',amt:12000,cat:'其他',to:'',    day:2,  on:true, auto:true},
  {id:'t_phone',  n:'電話費',   amt:599,  cat:'其他',  to:'',      day:1,  on:true, auto:true},
  {id:'t_parent', n:'孝親費',   amt:6000, cat:'孝親費',to:'',      day:1,  on:true, auto:true}];
 
@@ -506,7 +532,7 @@ let lastPay= LS.get('ledger_lastpay','sinopac_card');
 let cfg    = deepMerge(structuredClone(DEF_CFG), LS.get('ledger_cfg',{}));
 let tpls   = LS.get('ledger_tpls',null) || structuredClone(DEF_TPLS);
 let bills  = LS.get('ledger_bills',{});     // { 'YYYY-MM': { cardKey:{amt,paid,ts} } }
-let sal    = LS.get('ledger_sal',{});       // { 'YYYY-MM': 薪水 }
+let sal    = LS.get('ledger_sal',{});       // { 'YYYY-MM': 本月預算 }
 let salAsked=LS.get('ledger_salasked',{});  // { 'YYYY-MM': true }
 let autoDone=LS.get('ledger_autodone',{});  // { 'YYYY-MM:tplId': true }
 const hadAutoDone=(localStorage.getItem('ledger_autodone')!==null);
@@ -562,6 +588,19 @@ function migrate(){
   /* 舊樣板沒有 auto 欄位：補成「自動記入」 */
   let pchanged=false;
   tpls.forEach(t=>{if(t.auto===undefined){t.auto=true;pchanged=true;}});
+  /* v2：台北房租改成自己在日常記帳 → 移除樣板；新增 0050 每月 2 號 12,000 */
+  if((cfg.ver||1)<CFG_VER){
+    const before=tpls.length;
+    tpls=tpls.filter(t=>t.id!=='t_rent_tp');
+    if(tpls.length!==before)pchanged=true;
+    if(!tpls.some(t=>t.id==='t_0050')){
+      tpls.push({id:'t_0050',n:'0050 股票買入',amt:12000,cat:'其他',to:'',day:2,on:true,auto:true});
+      pchanged=true;
+    }
+    /* 富邦學貸每月還款額更正為 3,353（只在還是舊預設 3406 時才動，不覆蓋手動改過的） */
+    if(cfg.loans&&cfg.loans.fubon&&cfg.loans.fubon.monthly===3406)cfg.loans.fubon.monthly=3353;
+    cfg.ver=CFG_VER; saveCfg();
+  }
   if(pchanged)LS.set('ledger_tpls',tpls);
   /* 從舊版升級：已經有紀錄、但從來沒有自動記入過 → 那些月份都是你手動記的，
      不要回頭再補一次造成重複。已有紀錄的月份一律標記為「已處理」，
@@ -693,7 +732,7 @@ function renderList(mi){
       const pn=x.auto?'固定':(payMap[x.pay]?payMap[x.pay].n:'');
       h+=`<button class="row" data-id="${x.id}">
         <span class="ic" style="background:var(${cm.c})22;color:var(${cm.c})">${cm.e}</span>
-        <span class="rmid"><div class="rcat">${escapeHtml(x.cat)}${pn?`<span class="ptag${x.auto?' auto':''}">${pn}</span>`:''}</div>${x.note?`<div class="rnote">${escapeHtml(x.note)}</div>`:''}</span>
+        <span class="rmid"><div class="rcat">${escapeHtml(x.cat)}${pn?`<span class="ptag${x.auto?' auto':''}">${pn}</span>`:''}${x.ex?`<span class="ptag">不計預算</span>`:''}</div>${x.note?`<div class="rnote">${escapeHtml(x.note)}</div>`:''}</span>
         <span class="ramt num">${fmt(x.amount)}</span></button>`;});
     h+=`</div>`;
   });
@@ -716,6 +755,10 @@ function cardUsed(ym,cardKey){
 }
 /* 本月直接從大戶出去的錢（固定轉帳、現金提領、其他大戶扣款） */
 function dawhoOut(ym){return monthItems(ym).filter(x=>x.pay==='dawho').reduce((s,x)=>s+x.amount,0);}
+/* 本月已花費＝日常 tab 的本月總額，扣掉標記「不計入預算」的（例如台北房租） */
+function spent(ym){return monthItems(ym).filter(x=>!x.ex).reduce((s,x)=>s+x.amount,0);}
+function exCount(ym){return monthItems(ym).filter(x=>x.ex).length;}
+function exTotal(ym){return monthItems(ym).filter(x=>x.ex).reduce((s,x)=>s+x.amount,0);}
 function billTotal(ym){const b=monthBills(ym);return CARDS.reduce((s,c)=>s+(+b[c.k].amt||0),0);}
 function billPaid(ym){const b=monthBills(ym);return CARDS.reduce((s,c)=>s+(b[c.k].paid?(+b[c.k].amt||0):0),0);}
 
@@ -774,11 +817,12 @@ function bar(name,valTxt,pct,color,footL,footR){
 
 function renderFin(){
   const ym=curMonth, b=monthBills(ym), isCur=(ym===thisMonth());
-  const salary=+(sal[ym]||0);
-  const out=dawhoOut(ym), bt=billTotal(ym), bp=billPaid(ym);
-  const left=salary-out-bt;
-  const pct=salary>0?left/salary*100:0;
+  const budget=+(sal[ym]||0);
+  const used=spent(ym), bt=billTotal(ym), bp=billPaid(ym);
+  const left=budget-used;
+  const pct=budget>0?left/budget*100:0;
   const unspecified=monthItems(ym).filter(x=>!x.pay).length;
+  const exN=exCount(ym), exA=exTotal(ym);
 
   /* 1. 本月信用卡繳款 */
   let h=`<section class="card fcard">
@@ -802,31 +846,36 @@ function renderFin(){
     ${CARDS.some(c=>!(cfg.cardDays[c.k]||{}).debit)?`<div class="warn">⚠️ 有卡別還沒設定扣款日，點下方「設定扣款日 / 額度」補上。</div>`:''}
   </section>`;
 
-  /* 2. 永豐大戶可花費水位 */
+  /* 2. 本月預算 */
   h+=`<section class="card fcard">
-    <div class="fh"><h3>🏦 永豐大戶 · 本月可花費</h3><div class="fsub">${isCur?'本月':'歷史月'}</div></div>
+    <div class="fh"><h3>🏦 本月預算</h3><div class="fsub">${isCur?'本月':'歷史月'}</div></div>
     <div class="balbox">
-      <div class="tankwrap">${waterTank(pct,'大戶水位','可花費 / 薪水')}</div>
+      <div class="tankwrap">${waterTank(pct,'預算水位','剩餘 / 預算')}</div>
       <div class="ballines">
-        <div class="bl"><span>本月薪水</span><b class="num"><button class="editnum" id="editSal">NT$ ${fmt(salary)}</button></b></div>
-        <div class="bl"><span>大戶直接支出</span><b class="num">− ${fmt(out)}</b></div>
-        <div class="bl"><span>信用卡代繳</span><b class="num">− ${fmt(bt)}</b></div>
-        <div class="bl sum${left<0?' neg':''}"><span>繳完後還剩</span><b class="num">NT$ ${fmt(left)}</b></div>
+        <div class="bl"><span>本月預算</span><b class="num"><button class="editnum" id="editSal">NT$ ${fmt(budget)}</button></b></div>
+        <div class="bl"><span>已花費</span><b class="num">− ${fmt(used)}</b></div>
+        <div class="bl sum${left<0?' neg':''}"><span>剩餘預算</span><b class="num">NT$ ${fmt(left)}</b></div>
       </div>
     </div>
-    ${salary<=0?`<div class="warn">⚠️ 還沒輸入本月薪水，水位無法計算。點上面的金額輸入。</div>`:''}
-    ${unspecified?`<div class="warn">⚠️ 本月有 ${unspecified} 筆紀錄沒有支付方式（舊資料），不會算進任何額度。點該筆紀錄補上即可。</div>`:''}
+    <div class="exnote">已花費＝日常 tab 的本月總額${exN?`，已排除 ${exN} 筆「不計入預算」（${fmt(exA)} 元）`:''}</div>
+    ${budget<=0?`<div class="warn">⚠️ 還沒設定本月預算，水位無法計算。點上面的金額輸入。</div>`:''}
+    ${left<0?`<div class="warn">⚠️ 已超出預算 NT$ ${fmt(-left)}。</div>`:''}
+    ${unspecified?`<div class="warn">⚠️ 本月有 ${unspecified} 筆紀錄沒有支付方式（舊資料），不會算進信用卡額度。點該筆紀錄補上即可。</div>`:''}
   </section>`;
 
-  /* 3. 信用卡可用額度 */
+  /* 3. 信用卡可用額度（與上面的帳單連動：未繳的扣掉，打勾繳款後加回來） */
   h+=`<section class="card fcard">
-    <div class="fh"><h3>📊 信用卡可用額度</h3><div class="fsub">額度 − 本月已刷</div></div>`;
+    <div class="fh"><h3>📊 信用卡可用額度</h3><div class="fsub">額度 − 未繳帳單 − 本月已刷</div></div>`;
   CARDS.forEach(c=>{
-    const lim=+(cfg.limits[c.k]||0), used=cardUsed(ym,c.k);
-    const avail=Math.max(0,lim-used), p=lim>0?avail/lim*100:0;
+    const lim=+(cfg.limits[c.k]||0), swiped=cardUsed(ym,c.k);
+    const r=b[c.k], billAmt=+(r.amt||0);
+    const owed=r.paid?0:billAmt;                    // 打勾＝已繳，額度加回來
+    const avail=Math.max(0,lim-owed-swiped), p=lim>0?avail/lim*100:0;
+    const foot=[owed?`待繳帳單 ${fmt(owed)}`:(billAmt?`帳單 ${fmt(billAmt)} 已繳 ✓`:'無帳單'),
+                swiped?`本月已刷 ${fmt(swiped)}`:null].filter(Boolean).join(' · ');
     h+=bar(c.n, lim>0?`NT$ ${fmt(avail)} 可用`:'未設定額度', p,
       p<20?'--danger':'--ok',
-      `已刷 ${fmt(used)}`, lim>0?`額度 ${fmt(lim)} · 剩 ${Math.round(p)}%`:'請先設定額度');
+      foot, lim>0?`額度 ${fmt(lim)} · 剩 ${Math.round(p)}%`:'請先設定額度');
   });
   h+=`<button class="wide" id="editCards" style="margin-top:4px">設定扣款日 / 額度</button></section>`;
 
@@ -916,11 +965,11 @@ function editLoans(){
   saveCfg();renderFin();scheduleSync();toast('已更新學貸設定');
 }
 
-/* ══════════════ 本月薪水 ══════════════ */
+/* ══════════════ 本月預算 ══════════════ */
 let salMonth=null;
 function openSal(ym){
   salMonth=ym||thisMonth();
-  $('#salTitle').textContent=salMonth.replace('-',' 年 ')+' 月薪水';
+  $('#salTitle').textContent=salMonth.replace('-',' 年 ')+' 月預算';
   $('#fSal').value=sal[salMonth]||'';
   openModal('#salSheet');setTimeout(()=>$('#fSal').focus(),260);
 }
@@ -929,7 +978,7 @@ $('#salSave').onclick=()=>{const v=evalAmt($('#fSal').value);
   LS.set('ledger_sal',sal);salAsked[salMonth]=true;LS.set('ledger_salasked',salAsked);
   closeModal();render();scheduleSync();};
 $('#salSkip').onclick=()=>{salAsked[salMonth]=true;LS.set('ledger_salasked',salAsked);closeModal();};
-/* 每月最後一天問一次 */
+/* 每月最後一天問一次本月預算 */
 function maybeAskSalary(){
   const tm=thisMonth();
   if(todayStr()!==lastDayOf(tm))return;
@@ -984,6 +1033,8 @@ $('#tplAdd').onclick=()=>{
   saveTpls();renderTplList();if(mode==='fin')renderFin();scheduleSync();
 };
 $('#tplBtn').onclick=()=>{closeModal();setTimeout(openTplSheet,200);};
+$('#tplClose').onclick=closeModal;
+$('#tplDone').onclick=closeModal;
 
 /* ══════════════ 記帳表單 ══════════════ */
 let selCat=null, selPay=lastPay;
@@ -997,6 +1048,10 @@ function buildPays(){const box=$('#pays');box.innerHTML='';
     b.textContent=p.n;b.onclick=()=>setPay(p.k);box.appendChild(b);});}
 function setChip(k){selCat=k;$('#chips').querySelectorAll('.chip').forEach(x=>x.classList.toggle('sel',x.dataset.k===k));}
 function setPay(k){selPay=k;$('#pays').querySelectorAll('.pay').forEach(x=>x.classList.toggle('sel',x.dataset.k===k));}
+let selEx=false;
+function setEx(v){selEx=!!v;const b=$('#fEx');b.classList.toggle('on',selEx);
+  b.querySelector('.exbox').textContent=selEx?'✓':'　';}
+$('#fEx').onclick=()=>setEx(!selEx);
 buildChips();buildPays();
 
 /* 金額欄＝小計算機：支援 100+50+30、按＋連加，即時顯示合計 */
@@ -1016,19 +1071,20 @@ function openSheet(id,pre){
   const arr=travel?trips:items;
   if(id){const x=arr.find(i=>i.id===id);if(!x)return;$('#sheetTitle').textContent='編輯';
     $('#fAmt').value=x.amount;setChip(x.cat);$('#fDate').value=x.date;$('#fNote').value=x.note||'';$('#delBtn').hidden=false;
-    if(travel){$('#fTrip').value=x.trip||'';$('#fCur').value=x.cur||lastCur;}else setPay(x.pay||'');}
+    if(travel){$('#fTrip').value=x.trip||'';$('#fCur').value=x.cur||lastCur;}
+    else{setPay(x.pay||'');setEx(!!x.ex);}}
   else{$('#sheetTitle').textContent=travel?'記一筆旅遊花費':(pre&&pre.note?'記一筆 · '+pre.note:'記一筆');
     $('#fAmt').value=pre&&pre.amount?pre.amount:'';
     setChip(pre&&pre.cat?pre.cat:null);
     $('#fDate').value=(pre&&pre.date)||(curMonth===thisMonth()?todayStr():curMonth+'-01');
     $('#fNote').value=(pre&&pre.note)||'';$('#delBtn').hidden=true;
     if(travel){$('#fTrip').value=curTrip||'';$('#fCur').value=lastCur;}
-    else setPay((pre&&pre.pay)||lastPay);}
+    else{setPay((pre&&pre.pay)||lastPay);setEx(pre&&pre.ex);}}
   if(travel){updateTripDatalist();$('#amtCur').textContent=(curMap[$('#fCur').value]||{sym:'NT$'}).sym;}
   else{$('#amtCur').textContent='NT$';}
   updateEq();openModal('#sheet');setTimeout(()=>$('#fAmt').focus(),260);
 }
-/* 一次只開一張 sheet：避免薪水/設定視窗疊在記帳表單上，把欄位擠掉 */
+/* 一次只開一張 sheet：避免預算/設定視窗疊在記帳表單上，把欄位擠掉 */
 function openModal(sel){
   document.querySelectorAll('.sheet').forEach(s=>{if(s!==$(sel))s.classList.remove('on');});
   $('#backdrop').classList.add('on');$(sel).classList.add('on');
@@ -1059,8 +1115,8 @@ $('#saveBtn').onclick=async ()=>{
     closeModal();render();scheduleSync();return;
   }
   if(!selPay){alert('請選一個支付方式');return;}
-  if(editId){const x=items.find(i=>i.id===editId);Object.assign(x,{amount:amt,cat:selCat,date,note,pay:selPay});}
-  else{items.push({id:Date.now(),amount:amt,cat:selCat,date,note,pay:selPay});}
+  if(editId){const x=items.find(i=>i.id===editId);Object.assign(x,{amount:amt,cat:selCat,date,note,pay:selPay,ex:selEx});}
+  else{items.push({id:Date.now(),amount:amt,cat:selCat,date,note,pay:selPay,ex:selEx});}
   LS.set('ledger_items',items);
   lastPay=selPay;LS.set('ledger_lastpay',lastPay);
   if(date.slice(0,7)!==curMonth)curMonth=date.slice(0,7);
@@ -1102,8 +1158,8 @@ function csvCell(s){s=(s==null?'':''+s);return /[",\n]/.test(s)?'"'+s.replace(/"
 function exportCSV(scope){
   const rows=(scope==='month'?monthItems():items).slice().sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
   if(!rows.length){alert('沒有資料可匯出');return;}
-  let csv='﻿日期,分類,金額,支付方式,備註,來源\n';
-  rows.forEach(x=>{csv+=[x.date,x.cat,x.amount,(payMap[x.pay]||{n:''}).n,csvCell(x.note),x.auto?'固定轉帳':'手動'].join(',')+'\n';});
+  let csv='﻿日期,分類,金額,支付方式,備註,來源,計入預算\n';
+  rows.forEach(x=>{csv+=[x.date,x.cat,x.amount,(payMap[x.pay]||{n:''}).n,csvCell(x.note),x.auto?'固定轉帳':'手動',x.ex?'否':'是'].join(',')+'\n';});
   download2((scope==='month'?`記帳_${curMonth}`:'記帳_全部')+'.csv',csv,'text/csv;charset=utf-8');
 }
 function download2(name,str,type){const b=new Blob([str],{type});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();}
@@ -1117,7 +1173,7 @@ function openReport(){
   const catRows=cats.map(([k,v])=>`<tr><td>${(catMap[k]||{e:''}).e} ${escapeHtml(k)}</td><td class="r">${fmt(v)}</td><td class="r">${total?Math.round(v/total*100):0}%</td></tr>`).join('')||'<tr><td colspan="3">無</td></tr>';
   const b=monthBills(curMonth);
   const billRows=CARDS.map(c=>`<tr><td>${c.n}</td><td class="r">${fmt(b[c.k].amt)}</td><td>${b[c.k].paid?'✓ 已繳':'未繳'}</td></tr>`).join('');
-  const salary=+(sal[curMonth]||0), out=dawhoOut(curMonth), bt=billTotal(curMonth);
+  const budget=+(sal[curMonth]||0), used=spent(curMonth);
   const loanRows=['fubon','bot'].map(k=>{const L=cfg.loans[k],s=loanState(L);
     return `<tr><td>${L.n}</td><td class="r">${fmt(s.left)}</td><td class="r">${fmt(L.monthly)}</td><td class="r">${s.monthsLeft} 期</td><td>${s.done}</td></tr>`;}).join('');
   const rows=mi.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
@@ -1126,11 +1182,10 @@ function openReport(){
     <div class="rv-sub">產生日期：${todayStr()}　·　共 ${mi.length} 筆</div>
     <div class="rv-total">本月支出合計　<b>NT$ ${fmt(total)}</b></div>
     <h3>分類統計</h3><table><thead><tr><th>分類</th><th class="r">金額</th><th class="r">占比</th></tr></thead><tbody>${catRows}</tbody></table>
-    <h3>永豐大戶結餘</h3><table><tbody>
-      <tr><th>本月薪水</th><td class="r">${fmt(salary)}</td></tr>
-      <tr><th>大戶直接支出</th><td class="r">−${fmt(out)}</td></tr>
-      <tr><th>信用卡代繳</th><td class="r">−${fmt(bt)}</td></tr>
-      <tr><th>繳完後剩餘</th><td class="r"><b>${fmt(salary-out-bt)}</b></td></tr></tbody></table>
+    <h3>本月預算</h3><table><tbody>
+      <tr><th>本月預算</th><td class="r">${fmt(budget)}</td></tr>
+      <tr><th>已花費</th><td class="r">−${fmt(used)}</td></tr>
+      <tr><th>剩餘預算</th><td class="r"><b>${fmt(budget-used)}</b></td></tr></tbody></table>
     <h3>信用卡繳款</h3><table><thead><tr><th>卡別</th><th class="r">帳單金額</th><th>狀態</th></tr></thead><tbody>${billRows}</tbody></table>
     <h3>學貸剩餘</h3><table><thead><tr><th>貸款</th><th class="r">剩餘</th><th class="r">每月</th><th class="r">剩餘期數</th><th>預估清償</th></tr></thead><tbody>${loanRows}</tbody></table>
     <h3>明細</h3><table><thead><tr><th>日期</th><th>分類</th><th>支付</th><th>備註</th><th class="r">金額</th></tr></thead><tbody>${itemRows}</tbody></table>`;
@@ -1228,8 +1283,9 @@ function syncPayload(){
     const mi=monthItems(M),by={};
     CATS.forEach(c=>by[c.k]=0); mi.forEach(x=>by[x.cat]=(by[x.cat]||0)+x.amount);
     return {month:M,total:mi.reduce((s,x)=>s+x.amount,0),count:mi.length,cats:by,
-      salary:+(sal[M]||0),dawhoOut:dawhoOut(M),billTotal:billTotal(M),billPaid:billPaid(M),
-      dawhoLeft:+(sal[M]||0)-dawhoOut(M)-billTotal(M)};
+      budget:+(sal[M]||0),spent:spent(M),exBudget:exTotal(M),dawhoOut:dawhoOut(M),
+      billTotal:billTotal(M),billPaid:billPaid(M),
+      budgetLeft:+(sal[M]||0)-spent(M)};
   });
   return {v:2,generatedAt:new Date().toISOString(),items,trips,tpls,bills,sal,cfg,loans,summary,
     accounts:ACCOUNTS,cards:CARDS.map(c=>({...c,limit:+(cfg.limits[c.k]||0),...(cfg.cardDays[c.k]||{})})),

@@ -127,11 +127,12 @@ function writeItems_(ss, d) {
       x.pay || '',
       x.note || '',
       x.auto ? '固定轉帳' : '手動',
+      x.ex ? '否' : '是',
       x.auto || ''
     ];
   });
   dump_(ss, TABS.items,
-    ['id', '日期', '月份', '分類', '金額', '支付方式', '支付代碼', '備註', '來源', '自動記入鍵'],
+    ['id', '日期', '月份', '分類', '金額', '支付方式', '支付代碼', '備註', '來源', '計入預算', '自動記入鍵'],
     rows, {money: [5], date: [2]});
 }
 
@@ -242,21 +243,22 @@ function writeLoans_(ss, d) {
 function writeSummary_(ss, d) {
   var cats = (d.cats || []).map(function (c) { return c.k; });
   var header = ['月份', '總支出', '筆數'].concat(cats)
-    .concat(['薪水', '大戶直接支出', '信用卡帳單', '已繳卡費', '大戶繳完後剩餘', '可花費比例']);
+    .concat(['本月預算', '已花費', '不計入預算', '信用卡帳單', '已繳卡費', '剩餘預算', '剩餘預算比例']);
   var rows = (d.summary || []).map(function (s) {
     var r = [s.month, Number(s.total) || 0, Number(s.count) || 0];
     cats.forEach(function (k) { r.push(Number((s.cats || {})[k]) || 0); });
-    var salary = Number(s.salary) || 0;
-    r.push(salary, Number(s.dawhoOut) || 0, Number(s.billTotal) || 0,
-           Number(s.billPaid) || 0, Number(s.dawhoLeft) || 0,
-           salary ? (Number(s.dawhoLeft) || 0) / salary : '');
+    var budget = Number(s.budget) || 0;
+    r.push(budget, Number(s.spent) || 0, Number(s.exBudget) || 0,
+           Number(s.billTotal) || 0, Number(s.billPaid) || 0,
+           Number(s.budgetLeft) || 0,
+           budget ? (Number(s.budgetLeft) || 0) / budget : '');
     return r;
   });
   var money = [2];
   for (var i = 0; i < cats.length; i++) money.push(4 + i);
   var base = 4 + cats.length;
-  money = money.concat([base, base + 1, base + 2, base + 3, base + 4]);
-  dump_(ss, TABS.summary, header, rows, {money: money, pct: [base + 5]});
+  money = money.concat([base, base + 1, base + 2, base + 3, base + 4, base + 5]);
+  dump_(ss, TABS.summary, header, rows, {money: money, pct: [base + 6]});
 }
 
 /** 同步狀態 */
