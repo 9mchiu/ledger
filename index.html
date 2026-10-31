@@ -477,7 +477,7 @@ const CARDS=[
  {k:'taishin',n:'台新卡',payFrom:'richart'}];
 
 /* 設定版號：升版時把既有使用者的舊預設值帶到新值（只改沒被手動編輯過的） */
-const CFG_VER=2;
+const CFG_VER=3;
 /* 預設設定（都可在 App 內改：額度會調整，隨時用「設定扣款日 / 額度」更新） */
 const DEF_CFG={
   ver:CFG_VER,
@@ -489,8 +489,9 @@ const DEF_CFG={
     taishin:{by:21,debit:22}    // 最慢 21 號轉進 Richart，22 號扣款
   },
   loans:{
-    fubon:{n:'富邦學貸',acc:'fubon',snapDate:'2026-10-31',snapBal:109462,monthly:3353,debitDay:1},
-    bot:  {n:'台銀學貸',acc:'bot',  snapDate:'2026-10-31',snapBal:183587,monthly:3012,debitDay:12}
+    /* monthly = 銀行實際扣款（還款）金額，與大戶轉出金額不同，轉出看 tpl 那筆 */
+    fubon:{n:'富邦學貸',acc:'fubon',tpl:'t_fubon',snapDate:'2026-10-31',snapBal:109462,monthly:3353,debitDay:1},
+    bot:  {n:'台銀學貸',acc:'bot',  tpl:'t_bot',  snapDate:'2026-10-31',snapBal:183587,monthly:2930,debitDay:12}
   }
 };
 /* 每月固定轉帳（全部由永豐大戶轉出）
@@ -597,8 +598,18 @@ function migrate(){
       tpls.push({id:'t_0050',n:'0050 股票買入',amt:12000,cat:'其他',to:'',day:2,on:true,auto:true});
       pchanged=true;
     }
-    /* 富邦學貸每月還款額更正為 3,353（只在還是舊預設 3406 時才動，不覆蓋手動改過的） */
-    if(cfg.loans&&cfg.loans.fubon&&cfg.loans.fubon.monthly===3406)cfg.loans.fubon.monthly=3353;
+    /* 學貸 monthly 改為「銀行實扣」而非「大戶轉出」：富邦 3406→3353、台銀 3012→2930。
+       只在還是舊預設值時才動，不覆蓋手動改過的。 */
+    if(cfg.loans){
+      if(cfg.loans.fubon){
+        if(cfg.loans.fubon.monthly===3406)cfg.loans.fubon.monthly=3353;
+        if(!cfg.loans.fubon.tpl)cfg.loans.fubon.tpl='t_fubon';
+      }
+      if(cfg.loans.bot){
+        if(cfg.loans.bot.monthly===3012)cfg.loans.bot.monthly=2930;
+        if(!cfg.loans.bot.tpl)cfg.loans.bot.tpl='t_bot';
+      }
+    }
     cfg.ver=CFG_VER; saveCfg();
   }
   if(pchanged)LS.set('ledger_tpls',tpls);
@@ -885,9 +896,10 @@ function renderFin(){
     <div class="fh"><h3>🎓 學貸剩餘</h3><div class="fsub">以 ${cfg.loans.fubon.snapDate} 餘額推算</div></div>`;
   ['fubon','bot'].forEach(k=>{
     const L=cfg.loans[k], s=loanState(L);
+    const tp=tpls.find(t=>t.id===L.tpl); const xfer=tp?+tp.amt:0;
     h+=`<div class="lrow">
       <span class="fname"><b>${escapeHtml(L.n)}</b>
-        <small>每月 ${fmt(L.monthly)} · ${L.debitDay} 號扣款${s.monthsLeft?` · 還 ${s.monthsLeft} 期 · 預估 ${s.done}`:` · ${s.done}`}</small></span>
+        <small>每月實扣 ${fmt(L.monthly)}${xfer&&xfer!==L.monthly?`（大戶轉出 ${fmt(xfer)}）`:''} · ${L.debitDay} 號扣款${s.monthsLeft?` · 還 ${s.monthsLeft} 期 · 預估 ${s.done}`:` · ${s.done}`}</small></span>
       <span class="lam num">NT$ ${fmt(s.left)}</span></div>`;
   });
   h+=`<div class="ftot"><span>兩筆合計待還</span><span class="num"><b>NT$ ${fmt(totalLeft)}</b></span></div>
@@ -957,7 +969,7 @@ function editLoans(){
     const L=cfg.loans[k];
     const bal=askNum(`${L.n}：今天的剩餘待還款（NT$）`,loanState(L).left);
     if(bal!=null){L.snapBal=Math.max(0,bal);L.snapDate=todayStr();}
-    const mo=askNum(`${L.n}：每月還款額（NT$）`,L.monthly);
+    const mo=askNum(`${L.n}：銀行每月實際扣款金額（NT$）\n（不是從大戶轉出的金額）`,L.monthly);
     if(mo!=null)L.monthly=Math.max(0,mo);
     const dd=askNum(`${L.n}：銀行扣款日（1-31）`,L.debitDay);
     if(dd!=null)L.debitDay=Math.min(31,Math.max(1,dd));
