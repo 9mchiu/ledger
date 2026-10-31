@@ -509,6 +509,7 @@ let bills  = LS.get('ledger_bills',{});     // { 'YYYY-MM': { cardKey:{amt,paid,
 let sal    = LS.get('ledger_sal',{});       // { 'YYYY-MM': 薪水 }
 let salAsked=LS.get('ledger_salasked',{});  // { 'YYYY-MM': true }
 let autoDone=LS.get('ledger_autodone',{});  // { 'YYYY-MM:tplId': true }
+const hadAutoDone=(localStorage.getItem('ledger_autodone')!==null);
 let curRate=null;
 
 function deepMerge(base,over){
@@ -562,6 +563,14 @@ function migrate(){
   let pchanged=false;
   tpls.forEach(t=>{if(t.auto===undefined){t.auto=true;pchanged=true;}});
   if(pchanged)LS.set('ledger_tpls',tpls);
+  /* 從舊版升級：已經有紀錄、但從來沒有自動記入過 → 那些月份都是你手動記的，
+     不要回頭再補一次造成重複。已有紀錄的月份一律標記為「已處理」，
+     真的想補的話用帳務頁的「補記本月固定支出」。 */
+  if(!hadAutoDone&&items.length){
+    [...new Set(items.map(x=>x.date.slice(0,7)))].forEach(M=>
+      tpls.forEach(t=>{autoDone[M+':'+t.id]='skip';}));   // 'skip' ≠ true：不自動記，但仍可手動補
+    LS.set('ledger_autodone',autoDone);
+  }
 }
 migrate();
 
@@ -837,19 +846,21 @@ function renderFin(){
 
   /* 5. 轉帳紀錄 */
   const autoTpls=tpls.filter(t=>t.on&&t.auto);
-  const posted=autoTpls.filter(t=>autoDone[ym+':'+t.id]).length;
+  const posted=autoTpls.filter(t=>autoDone[ym+':'+t.id]===true).length;
+  const skipped=autoTpls.filter(t=>autoDone[ym+':'+t.id]==='skip').length;
   const manualTpls=tpls.filter(t=>t.on&&!t.auto);
   h+=`<section class="card fcard">
     <div class="fh"><h3>🔁 轉帳紀錄</h3><div class="fsub">本月已自動記入 ${posted} / ${autoTpls.length}</div></div>
     <div class="tplgrid">`;
   tpls.filter(t=>t.on).forEach(t=>{
-    const done=t.auto&&autoDone[ym+':'+t.id];
+    const done=t.auto&&autoDone[ym+':'+t.id]===true;
     h+=`<button class="tplbtn" data-tpl="${t.id}"><b>${escapeHtml(t.n)}${done?' <span style="color:var(--ok)">✓</span>':(t.auto?'':' <span style="color:var(--faint);font-weight:600">手動</span>')}</b><small>NT$ ${fmt(t.amt)} · ${escapeHtml(t.cat)} · ${t.day} 號</small></button>`;
   });
   h+=`<button class="wide" data-adhoc="1">＋ 臨時轉帳（手動輸入）</button>
-      ${ym>thisMonth()&&posted<autoTpls.length?`<button class="wide" id="forcePost">預先記入本月固定支出</button>`:''}
+      ${posted<autoTpls.length?`<button class="wide" id="forcePost">${ym>thisMonth()?'預先記入':'補記'}本月固定支出（${autoTpls.length-posted} 筆）</button>`:''}
       <button class="wide" id="tplBtn2">固定轉帳設定</button>
     </div>
+    ${skipped?`<p class="hint" style="margin-top:10px;color:var(--muted)">這個月是你在舊版手動記的，所以沒有自動補（避免重複）。確定要補就按上面的補記。</p>`:''}
     <p class="hint" style="margin-top:10px">點項目＝以該金額記一筆（金額可改）。${manualTpls.length?`標「手動」的不會自動記入（${manualTpls.map(t=>escapeHtml(t.n)).join('、')}），轉完後自己點一下。`:''}台北房租的電費月份直接把金額改成 17,000。</p>
   </section>`;
 
@@ -867,7 +878,10 @@ function renderFin(){
   $('#editSal').onclick=()=>openSal(ym);
   $('#editCards').onclick=editCards;
   $('#editLoans').onclick=editLoans;
-  const fp=$('#forcePost'); if(fp)fp.onclick=()=>{const n=autoPost(ym,true);toast(n?`已記入 ${n} 筆`:'本月已記入過');render();scheduleSync();};
+  const fp=$('#forcePost'); if(fp)fp.onclick=()=>{
+    if(skipped&&!confirm(`這個月已經有你手動記的紀錄，補記可能會重複。\n確定補 ${autoTpls.length-posted} 筆固定支出？`))return;
+    tpls.forEach(t=>{if(autoDone[ym+':'+t.id]==='skip')delete autoDone[ym+':'+t.id];});
+    const n=autoPost(ym,true);toast(n?`已補記 ${n} 筆`:'本月已記入過');render();scheduleSync();};
   $('#tplBtn2').onclick=openTplSheet;
   $('#finView').querySelectorAll('[data-tpl]').forEach(btn=>{
     btn.onclick=()=>{const t=tpls.find(x=>x.id===btn.dataset.tpl);if(!t)return;

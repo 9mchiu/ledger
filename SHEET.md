@@ -21,7 +21,7 @@ App 每次存檔後會把**全部資料**POST 到 Apps Script，腳本把下列�
 | G | `支付代碼` | `sinopac_card` / `fubon_card` / `cathay_card` / `taishin_card` / `dawho` / `cash` |
 | H | `備註` | |
 | I | `來源` | `手動` 或 `固定轉帳` |
-| J | `自動記入鍵` | `YYYY-MM:樣板id`，防止同月重複記入 |
+| J | `自動記入鍵` | `YYYY-MM:樣板id`，防止同月重複記入（值為 `skip` 代表是升級前手動記的月份，不自動補） |
 
 **支付方式的語意（決定了額度與水位怎麼算）**
 
