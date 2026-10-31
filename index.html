@@ -477,7 +477,7 @@ const CARDS=[
  {k:'taishin',n:'台新卡',payFrom:'richart'}];
 
 /* 設定版號：升版時把既有使用者的舊預設值帶到新值（只改沒被手動編輯過的） */
-const CFG_VER=3;
+const CFG_VER=4;
 /* 預設設定（都可在 App 內改：額度會調整，隨時用「設定扣款日 / 額度」更新） */
 const DEF_CFG={
   ver:CFG_VER,
@@ -496,14 +496,16 @@ const DEF_CFG={
 };
 /* 每月固定轉帳（全部由永豐大戶轉出）
    on   = 顯示在「轉帳紀錄」快捷鍵（點一下就記一筆）
-   auto = 切換到該月份時自動記入（手動轉出的項目設 false） */
+   auto = 切換到該月份時自動記入（手動轉出的項目設 false）
+   ex   = 不計入「本月已花費」。固定轉帳預設全部不計入 ——
+          本月預算代表的是「扣掉這些固定支出之後、可以自由花的錢」。 */
 const DEF_TPLS=[
- {id:'t_bot',    n:'台銀學貸', amt:3012, cat:'學貸',  to:'bot',   day:1,  on:true, auto:true},
- {id:'t_fubon',  n:'富邦學貸', amt:3406, cat:'學貸',  to:'fubon', day:31, on:true, auto:true},
- {id:'t_rent_tc',n:'台中房租', amt:7500, cat:'房租',  to:'',      day:9,  on:true, auto:true},
- {id:'t_0050',   n:'0050 股票買入',amt:12000,cat:'其他',to:'',    day:2,  on:true, auto:true},
- {id:'t_phone',  n:'電話費',   amt:599,  cat:'其他',  to:'',      day:1,  on:true, auto:true},
- {id:'t_parent', n:'孝親費',   amt:6000, cat:'孝親費',to:'',      day:1,  on:true, auto:true}];
+ {id:'t_bot',    n:'台銀學貸', amt:3012, cat:'學貸',  to:'bot',   day:1,  on:true, auto:true, ex:true},
+ {id:'t_fubon',  n:'富邦學貸', amt:3406, cat:'學貸',  to:'fubon', day:31, on:true, auto:true, ex:true},
+ {id:'t_rent_tc',n:'台中房租', amt:7500, cat:'房租',  to:'',      day:9,  on:true, auto:true, ex:true},
+ {id:'t_0050',   n:'0050 股票買入',amt:12000,cat:'其他',to:'',    day:2,  on:true, auto:true, ex:true},
+ {id:'t_phone',  n:'電話費',   amt:599,  cat:'其他',  to:'',      day:1,  on:true, auto:true, ex:true},
+ {id:'t_parent', n:'孝親費',   amt:6000, cat:'孝親費',to:'',      day:1,  on:true, auto:true, ex:true}];
 
 /* 旅遊花費分類 + 幣別 */
 const TCATS=[
@@ -600,6 +602,15 @@ function migrate(){
     }
     /* 學貸 monthly 改為「銀行實扣」而非「大戶轉出」：富邦 3406→3353、台銀 3012→2930。
        只在還是舊預設值時才動，不覆蓋手動改過的。 */
+    /* v4：固定轉帳一律不計入「已花費」（本月預算＝扣掉固定支出後可自由花的錢）。
+       只動從沒設過 ex 的樣板，手動改過的不覆蓋；已自動記入的紀錄一併回溯。 */
+    let ichanged=false;
+    tpls.forEach(t=>{
+      if(t.ex!==undefined)return;
+      t.ex=true;pchanged=true;
+      items.forEach(x=>{if(x.auto&&x.auto.endsWith(':'+t.id)&&!x.ex){x.ex=true;ichanged=true;}});
+    });
+    if(ichanged)LS.set('ledger_items',items);
     if(cfg.loans){
       if(cfg.loans.fubon){
         if(cfg.loans.fubon.monthly===3406)cfg.loans.fubon.monthly=3353;
@@ -651,7 +662,7 @@ function autoPost(ym,force){
     if(amt<=0){autoDone[key]=true;return;}
     items.push({id:Date.now()+Math.floor(Math.random()*1000)+n,
       date:ym+'-'+pad(clampDay(ym,t.day)),cat:catMap[t.cat]?t.cat:'其他',amount:amt,
-      pay:'dawho',note:t.n,auto:key});
+      pay:'dawho',note:t.n,auto:key,ex:!!t.ex});
     autoDone[key]=true;n++;
   });
   if(n){LS.set('ledger_items',items);LS.set('ledger_autodone',autoDone);}
@@ -854,7 +865,8 @@ function renderFin(){
     <div class="ftot"><span>帳單合計</span><span class="num"><b>NT$ ${fmt(bt)}</b></span></div>
     <div class="ftot" style="border-top:0;padding-top:2px"><span>已繳 / 待繳</span>
       <span class="num">NT$ ${fmt(bp)} / <b>NT$ ${fmt(bt-bp)}</b></span></div>
-    ${CARDS.some(c=>!(cfg.cardDays[c.k]||{}).debit)?`<div class="warn">⚠️ 有卡別還沒設定扣款日，點下方「設定扣款日 / 額度」補上。</div>`:''}
+    ${CARDS.some(c=>!(cfg.cardDays[c.k]||{}).debit)?`<div class="warn">⚠️ 有卡別還沒設定扣款日。</div>`:''}
+    <button class="wide" id="editCards" style="margin-top:10px">設定扣款日 / 轉入期限</button>
   </section>`;
 
   /* 2. 本月預算 */
@@ -868,27 +880,11 @@ function renderFin(){
         <div class="bl sum${left<0?' neg':''}"><span>剩餘預算</span><b class="num">NT$ ${fmt(left)}</b></div>
       </div>
     </div>
-    <div class="exnote">已花費＝日常 tab 的本月總額${exN?`，已排除 ${exN} 筆「不計入預算」（${fmt(exA)} 元）`:''}</div>
+    <div class="exnote">已花費＝日常 tab 本月總額扣掉「不計入預算」的部分。${exN?`本月已排除 ${exN} 筆共 ${fmt(exA)} 元（固定轉帳與手動勾選的）。`:'本月沒有排除任何一筆。'}</div>
     ${budget<=0?`<div class="warn">⚠️ 還沒設定本月預算，水位無法計算。點上面的金額輸入。</div>`:''}
     ${left<0?`<div class="warn">⚠️ 已超出預算 NT$ ${fmt(-left)}。</div>`:''}
     ${unspecified?`<div class="warn">⚠️ 本月有 ${unspecified} 筆紀錄沒有支付方式（舊資料），不會算進信用卡額度。點該筆紀錄補上即可。</div>`:''}
   </section>`;
-
-  /* 3. 信用卡可用額度（與上面的帳單連動：未繳的扣掉，打勾繳款後加回來） */
-  h+=`<section class="card fcard">
-    <div class="fh"><h3>📊 信用卡可用額度</h3><div class="fsub">額度 − 未繳帳單 − 本月已刷</div></div>`;
-  CARDS.forEach(c=>{
-    const lim=+(cfg.limits[c.k]||0), swiped=cardUsed(ym,c.k);
-    const r=b[c.k], billAmt=+(r.amt||0);
-    const owed=r.paid?0:billAmt;                    // 打勾＝已繳，額度加回來
-    const avail=Math.max(0,lim-owed-swiped), p=lim>0?avail/lim*100:0;
-    const foot=[owed?`待繳帳單 ${fmt(owed)}`:(billAmt?`帳單 ${fmt(billAmt)} 已繳 ✓`:'無帳單'),
-                swiped?`本月已刷 ${fmt(swiped)}`:null].filter(Boolean).join(' · ');
-    h+=bar(c.n, lim>0?`NT$ ${fmt(avail)} 可用`:'未設定額度', p,
-      p<20?'--danger':'--ok',
-      foot, lim>0?`額度 ${fmt(lim)} · 剩 ${Math.round(p)}%`:'請先設定額度');
-  });
-  h+=`<button class="wide" id="editCards" style="margin-top:4px">設定扣款日 / 額度</button></section>`;
 
   /* 4. 學貸剩餘 */
   const totalLeft=['fubon','bot'].reduce((s,k)=>s+loanState(cfg.loans[k]).left,0);
@@ -946,7 +942,7 @@ function renderFin(){
   $('#tplBtn2').onclick=openTplSheet;
   $('#finView').querySelectorAll('[data-tpl]').forEach(btn=>{
     btn.onclick=()=>{const t=tpls.find(x=>x.id===btn.dataset.tpl);if(!t)return;
-      openSheet(null,{amount:t.amt,cat:t.cat,pay:'dawho',note:t.n,date:ym+'-'+pad(clampDay(ym,t.day))});};
+      openSheet(null,{amount:t.amt,cat:t.cat,pay:'dawho',note:t.n,ex:!!t.ex,date:ym+'-'+pad(clampDay(ym,t.day))});};
   });
   const ad=$('#finView').querySelector('[data-adhoc]');
   if(ad)ad.onclick=()=>openSheet(null,{pay:'dawho',note:'',date:isCur?todayStr():ym+'-01'});
@@ -954,15 +950,13 @@ function renderFin(){
 
 function editCards(){
   CARDS.forEach(c=>{
-    const lim=askNum(`${c.n} 信用卡額度（NT$，0 = 不顯示進度條）`,cfg.limits[c.k]||0);
-    if(lim!=null)cfg.limits[c.k]=Math.max(0,lim);
     const d=cfg.cardDays[c.k]||(cfg.cardDays[c.k]={by:0,debit:0});
     const db=askNum(`${c.n} 銀行扣款日（1-31，0 = 未設定）`,d.debit||0);
     if(db!=null)d.debit=Math.min(31,Math.max(0,db));
     const by=askNum(`${c.n} 最慢轉入日（1-31，0 = 不需轉入）`,d.by||0);
     if(by!=null)d.by=Math.min(31,Math.max(0,by));
   });
-  saveCfg();renderFin();scheduleSync();toast('已更新信用卡設定');
+  saveCfg();renderFin();scheduleSync();toast('已更新信用卡扣款日');
 }
 function editLoans(){
   ['fubon','bot'].forEach(k=>{
@@ -1009,16 +1003,25 @@ function renderTplList(){
   box.innerHTML=tpls.map(t=>`<div class="set-item">
     <div style="min-width:0"><div class="st">${escapeHtml(t.n)}${t.on?'':' <span style="color:var(--faint);font-size:11px">（已停用）</span>'}</div>
       <div class="sd">NT$ ${fmt(t.amt)} · ${escapeHtml(t.cat)} · 每月 ${t.day} 號${t.to&&accMap[t.to]?' → '+accMap[t.to].n:''}
-        · <b style="color:var(${t.auto?'--ok':'--muted'})">${t.auto?'自動記入':'手動轉出'}</b></div></div>
-    <span style="display:flex;gap:6px;flex:0 0 auto">
+        · <b style="color:var(${t.auto?'--ok':'--muted'})">${t.auto?'自動記入':'手動轉出'}</b>
+        · <b style="color:var(${t.ex?'--accent':'--muted'})">${t.ex?'不計入預算':'計入預算'}</b></div></div>
+    <span style="display:flex;gap:6px;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end">
       <button data-ed="${t.id}">編輯</button>
       <button data-au="${t.id}">${t.auto?'改手動':'改自動'}</button>
+      <button data-ex="${t.id}">${t.ex?'改計入':'不計入'}</button>
       <button data-tg="${t.id}">${t.on?'停用':'啟用'}</button>
       <button data-rm="${t.id}" style="color:var(--danger)">刪</button>
     </span></div>`).join('')||'<p class="hint">還沒有固定轉帳項目。</p>';
   box.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>editTpl(b.dataset.ed));
   box.querySelectorAll('[data-au]').forEach(b=>b.onclick=()=>{
     const t=tpls.find(x=>x.id===b.dataset.au);t.auto=!t.auto;saveTpls();renderTplList();if(mode==='fin')renderFin();scheduleSync();});
+  box.querySelectorAll('[data-ex]').forEach(b=>b.onclick=()=>{
+    const t=tpls.find(x=>x.id===b.dataset.ex);t.ex=!t.ex;saveTpls();
+    /* 連同本月已自動記入的那筆一起改，不然要等下個月才生效 */
+    let n=0;items.forEach(x=>{if(x.auto&&x.auto.endsWith(':'+t.id)&&x.ex!==!!t.ex){x.ex=!!t.ex;n++;}});
+    if(n)LS.set('ledger_items',items);
+    renderTplList();render();scheduleSync();
+    toast(`${t.n} 改為${t.ex?'不計入':'計入'}預算${n?`（同步更新 ${n} 筆）`:''}`);});
   box.querySelectorAll('[data-tg]').forEach(b=>b.onclick=()=>{
     const t=tpls.find(x=>x.id===b.dataset.tg);t.on=!t.on;saveTpls();renderTplList();if(mode==='fin')renderFin();scheduleSync();});
   box.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{
@@ -1041,7 +1044,8 @@ $('#tplAdd').onclick=()=>{
   const c=prompt('分類（'+CATS.map(x=>x.k).join('／')+'）','其他')||'其他';
   const d=askNum('每月幾號轉出（1-31）',1)||1;
   const au=confirm('每個月自動記入嗎？\n\n確定 = 自動（銀行預約轉帳）\n取消 = 手動（你自己轉，之後在轉帳紀錄點一下）');
-  tpls.push({id:'t_'+Date.now(),n:n.trim(),amt:Math.max(0,a),cat:catMap[c.trim()]?c.trim():'其他',to:'',day:Math.min(31,Math.max(1,d)),on:true,auto:au});
+  const ex=!confirm('要算進「本月已花費」嗎？\n\n確定 = 計入（一般支出）\n取消 = 不計入（投資、代墊等）');
+  tpls.push({id:'t_'+Date.now(),n:n.trim(),amt:Math.max(0,a),cat:catMap[c.trim()]?c.trim():'其他',to:'',day:Math.min(31,Math.max(1,d)),on:true,auto:au,ex});
   saveTpls();renderTplList();if(mode==='fin')renderFin();scheduleSync();
 };
 $('#tplBtn').onclick=()=>{closeModal();setTimeout(openTplSheet,200);};
