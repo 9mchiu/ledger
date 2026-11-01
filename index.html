@@ -136,11 +136,17 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .closebtn:active{transform:scale(.92);}
 .sheet-done{width:100%;background:var(--surface2);border:1px solid var(--line);color:var(--text);
   border-radius:13px;padding:13px;font-size:15px;font-weight:800;margin-top:10px;}
+/* 與記帳表單同一套：固定標頭＋可捲內容＋釘底按鈕。
+   .sheet 自己的 overflow 在 iOS 上不可靠，一律交給 .sheet-scroll。 */
+.sheet.panel{display:flex;flex-direction:column;padding:8px 0 0;max-height:88vh;overflow:hidden;}
+.sheet.panel>.sheet-head{flex:0 0 auto;padding:0 18px;margin:0 0 8px;}
+.sheet.panel>.sheet-scroll{flex:1 1 auto;min-height:0;padding:0 18px 8px;}
 
 /* ── 記帳表單：緊湊版（金額不再被壓縮） ── */
 #sheet{display:flex;flex-direction:column;padding:8px 0 0;max-height:90vh;}
 #sheet>h2{padding:0 18px;margin:0 0 8px;}
-.sheet-scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 18px 4px;flex:1 1 auto;min-height:0;}
+.sheet-scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  touch-action:pan-y;padding:0 18px 4px;flex:1 1 auto;min-height:0;}
 .sheet-foot{flex:0 0 auto;padding:10px 18px calc(16px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line);}
 .sheet-foot .save{margin-top:0;}
 .amt-input{display:flex;align-items:baseline;gap:6px;border-bottom:2px solid var(--line);padding-bottom:6px;margin-bottom:10px;}
@@ -385,7 +391,7 @@ body.fmode .fab,body.fmode #chartCard,body.fmode #list{display:none!important;}
 <!-- 本月預算 -->
 <div class="sheet" id="salSheet" role="dialog" aria-modal="true" aria-label="本月預算">
   <div class="grab"></div>
-  <h2 id="salTitle">本月預算</h2>
+  <div class="sheet-head"><h2 id="salTitle">本月預算</h2><button class="closebtn" id="salClose" aria-label="關閉">✕</button></div>
   <p class="flabel" id="salHint">作為本月預算水位的基準。已花費＝日常 tab 的本月總額。</p>
   <div class="amt-input"><span class="cur">NT$</span>
     <input id="fSal" inputmode="decimal" placeholder="0" aria-label="預算"></div>
@@ -394,21 +400,24 @@ body.fmode .fab,body.fmode #chartCard,body.fmode #list{display:none!important;}
 </div>
 
 <!-- 固定轉帳設定 -->
-<div class="sheet" id="tplSheet" role="dialog" aria-modal="true" aria-label="固定轉帳設定">
+<div class="sheet panel" id="tplSheet" role="dialog" aria-modal="true" aria-label="固定轉帳設定">
   <div class="grab"></div>
   <div class="sheet-head"><h2>固定轉帳設定</h2><button class="closebtn" id="tplClose" aria-label="關閉">✕</button></div>
+  <div class="sheet-scroll">
   <p class="flabel">全部由「永豐大戶」轉出。標「自動記入」的，切換到該月份時會自動記一筆（不會重複）；
     標「手動轉出」的只會出現在轉帳紀錄的快捷鍵，轉完後自己點一下。</p>
   <div id="tplList"></div>
   <button class="save" id="tplAdd" style="margin-top:12px">＋ 新增一項固定轉帳</button>
-  <button class="sheet-done" id="tplDone">完成，返回</button>
   <p class="hint">停用某項後，之後的月份就不會再自動記入。</p>
+  </div>
+  <div class="sheet-foot"><button class="sheet-done" id="tplDone" style="margin-top:0">完成，返回</button></div>
 </div>
 
 <!-- settings sheet -->
-<div class="sheet" id="setSheet" role="dialog" aria-modal="true" aria-label="設定">
+<div class="sheet panel" id="setSheet" role="dialog" aria-modal="true" aria-label="設定">
   <div class="grab"></div>
-  <h2>設定與備份</h2>
+  <div class="sheet-head"><h2>設定與備份</h2><button class="closebtn" id="setClose" aria-label="關閉">✕</button></div>
+  <div class="sheet-scroll">
   <div class="set-item"><div><div class="st">固定轉帳設定</div><div class="sd">每月自動記入的項目、金額、分類、日期</div></div><button id="tplBtn">編輯</button></div>
   <div class="set-item"><div><div class="st">匯出備份</div><div class="sd">存成 JSON 檔，換手機/清資料前先備份</div></div><button id="expBtn">匯出</button></div>
   <div class="set-item"><div><div class="st">匯入備份</div><div class="sd">從 JSON 檔還原</div></div><button id="impBtn">匯入</button></div>
@@ -430,6 +439,8 @@ body.fmode .fab,body.fmode #chartCard,body.fmode #list{display:none!important;}
   <div class="set-item"><div><div class="st st-danger" style="color:var(--danger)">清空所有紀錄</div><div class="sd">此動作無法復原</div></div><button id="clrBtn" style="color:var(--danger)">清空</button></div>
   <p class="hint">資料只存在這個瀏覽器（你的手機）。加到主畫面後就像 App 一樣。</p>
   <input type="file" id="impFile" accept="application/json" hidden>
+  </div>
+  <div class="sheet-foot"><button class="sheet-done" id="setDone" style="margin-top:0">完成，返回</button></div>
 </div>
 
 <div id="reportView">
@@ -1062,6 +1073,9 @@ $('#tplAdd').onclick=()=>{
 $('#tplBtn').onclick=()=>{closeModal();setTimeout(openTplSheet,200);};
 $('#tplClose').onclick=closeModal;
 $('#tplDone').onclick=closeModal;
+$('#setClose').onclick=closeModal;
+$('#setDone').onclick=closeModal;
+$('#salClose').onclick=()=>{salAsked[salMonth]=true;LS.set('ledger_salasked',salAsked);closeModal();};
 
 /* ══════════════ 記帳表單 ══════════════ */
 let selCat=null, selPay=lastPay;
