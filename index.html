@@ -417,11 +417,12 @@ body.fmode .fab,body.fmode #chartCard,body.fmode #list{display:none!important;}
     <div class="sd" style="margin:2px 0 8px">貼上你的 Apps Script 網址，之後每次記帳會自動鏡像到 Sheet</div>
     <input id="syncUrl" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec"
       style="width:100%;background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;font-size:14px;">
-    <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
       <button id="syncSaveBtn">儲存網址</button>
       <button id="syncNowBtn">立即同步</button>
-      <span class="sd" id="syncStatus" style="margin-left:auto">未設定</span>
+      <button id="syncTestBtn">測試連線</button>
     </div>
+    <div class="sd" id="syncStatus" style="margin-top:8px;line-height:1.5">未設定</div>
   </div>
   <div class="set-item"><div><div class="st">本月報表（列印 / 存 PDF）</div><div class="sd">分類統計＋明細，適合對帳、報帳</div></div><button id="reportBtn">開啟</button></div>
   <div class="set-item"><div><div class="st">匯出 CSV（Excel）</div><div class="sd">可用 Excel 開啟分析</div></div><span style="display:flex;gap:6px"><button id="csvMonthBtn">本月</button><button id="csvAllBtn">全部</button></span></div>
@@ -1306,9 +1307,10 @@ buildCurSel();
 if($('#fCur'))$('#fCur').onchange=()=>{lastCur=$('#fCur').value;LS.set('ledger_lastcur',lastCur);updateEq();};
 
 /* ══════════════ Google Sheet 同步 ══════════════ */
+const NEED_SCRIPT_VER='2026-11-01-v2';   // 要和 apps-script.gs 的 SCRIPT_VER 一致
 let syncUrl=LS.get('ledger_syncurl','');
 let syncTimer=null;
-function setSyncStatus(t){const el=$('#syncStatus');if(el)el.textContent=t;}
+function setSyncStatus(t){const el=$('#syncStatus');if(el)el.style.whiteSpace='pre-wrap',el.textContent=t;}
 function initSyncUI(){const i=$('#syncUrl');if(i)i.value=syncUrl;setSyncStatus(syncUrl?'已設定 · 自動同步':'未設定');}
 function scheduleSync(){if(!syncUrl)return;clearTimeout(syncTimer);syncTimer=setTimeout(()=>syncNow(false),1500);}
 function syncPayload(){
@@ -1327,18 +1329,75 @@ function syncPayload(){
     accounts:ACCOUNTS,cards:CARDS.map(c=>({...c,limit:+(cfg.limits[c.k]||0),...(cfg.cardDays[c.k]||{})})),
     cats:CATS.map(c=>({k:c.k,e:c.e})),pays:PAYS};
 }
+/* Apps Script 的 /exec 會轉址到 googleusercontent.com，那邊有 CORS 標頭，
+   而 text/plain 屬於 CORS 安全清單（不會觸發 preflight），所以可以用正常的
+   cors 模式讀回應 —— 這樣才看得到錯誤。失敗才退回 no-cors（盲送）。 */
+async function postSync(url,body){
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body,redirect:'follow'});
+    const txt=await r.text();
+    let j=null; try{j=JSON.parse(txt);}catch(e){}
+    if(!r.ok)return {mode:'cors',ok:false,err:`HTTP ${r.status}`,raw:txt.slice(0,160)};
+    if(j&&j.ok===false)return {mode:'cors',ok:false,err:j.error||'腳本回報失敗',ver:j.ver};
+    if(j&&j.ok)return {mode:'cors',ok:true,ver:j.ver,items:j.items};
+    return {mode:'cors',ok:false,err:'回應不是預期格式（可能是舊版腳本）',raw:txt.slice(0,160)};
+  }catch(e){
+    try{
+      await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body});
+      return {mode:'nocors',ok:null,err:String(e.message||e)};
+    }catch(e2){return {mode:'none',ok:false,err:String(e2.message||e2)};}
+  }
+}
 function syncNow(manual){
   const inp=$('#syncUrl');const url=((inp&&inp.value.trim())||syncUrl);
   if(!url){if(manual)alert('請先貼上 Apps Script 網址並按「儲存網址」');return;}
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(url)){
+    setSyncStatus('⚠️ 網址格式不對，要以 /exec 結尾（不是 /dev，也不是編輯器網址）');
+    if(manual)alert('網址要長這樣：\nhttps://script.google.com/macros/s/AKfy…/exec');
+    return;
+  }
   if(manual){syncUrl=url;LS.set('ledger_syncurl',syncUrl);}
   setSyncStatus('同步中…');
-  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(syncPayload())})
-    .then(()=>{const t=new Date();LS.set('ledger_synced',t.getTime());setSyncStatus('已同步 '+t.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}));})
-    .catch(()=>setSyncStatus('同步失敗，請檢查網址/網路'));
+  postSync(url,JSON.stringify(syncPayload())).then(r=>{
+    const t=new Date(), hm=t.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+    if(r.ok){LS.set('ledger_synced',t.getTime());
+      setSyncStatus(`✅ 已同步 ${hm} · 寫入 ${r.items} 筆 · 腳本 ${r.ver||'?'}`);
+      if(r.ver&&r.ver!==NEED_SCRIPT_VER)
+        setSyncStatus(`⚠️ 已同步 ${hm}，但 Sheet 上的腳本是舊版（${r.ver}）。請重貼 apps-script.gs 並「重新部署」。`);
+    }else if(r.ok===null){
+      setSyncStatus(`送出了但讀不到回應（${r.err}）。多半是部署權限沒設成「任何人」，或還沒建立新部署版本。按「測試連線」看詳情。`);
+    }else{
+      setSyncStatus(`❌ 同步失敗：${r.err}${r.raw?`\n${r.raw}`:''}`);
+    }
+  });
+}
+function syncTest(){
+  const inp=$('#syncUrl');const url=((inp&&inp.value.trim())||syncUrl);
+  if(!url){alert('請先貼上 Apps Script 網址');return;}
+  setSyncStatus('測試中…');
+  fetch(url,{method:'GET',redirect:'follow'})
+    .then(r=>r.text().then(txt=>({r,txt})))
+    .then(({r,txt})=>{
+      let j=null; try{j=JSON.parse(txt);}catch(e){}
+      if(j&&j.ok&&j.ver===NEED_SCRIPT_VER)
+        setSyncStatus(`✅ 連線正常 · 腳本 ${j.ver} · Sheet「${j.sheet}」· ${(j.tabs||[]).length} 張表`);
+      else if(j&&j.ok===false)
+        setSyncStatus(`❌ 腳本有執行錯誤：${j.error||'(未提供)'}`);
+      else if(j&&j.ver)
+        setSyncStatus(`⚠️ 連得到，但腳本是舊版（${j.ver}，需要 ${NEED_SCRIPT_VER}）。請重貼 apps-script.gs 並重新部署。`);
+      else if(/ledger sync ok/.test(txt))
+        setSyncStatus(`⚠️ 這是「舊版腳本」。請把 repo 裡的 apps-script.gs 整個重貼，再「部署 → 管理部署作業 → 編輯 → 版本選新版本」。`);
+      else if(/<html/i.test(txt))
+        setSyncStatus(`❌ 回傳的是登入頁，不是腳本。部署時「誰可以存取」要選「任何人」。`);
+      else setSyncStatus(`❌ 回應看不懂（HTTP ${r.status}）：${txt.slice(0,160)}`);
+    })
+    .catch(e=>setSyncStatus(`❌ 連不上：${e.message||e}。檢查網址是否以 /exec 結尾、部署權限是否為「任何人」。`));
 }
 if($('#syncSaveBtn')){
   $('#syncSaveBtn').onclick=()=>{syncUrl=$('#syncUrl').value.trim();LS.set('ledger_syncurl',syncUrl);setSyncStatus(syncUrl?'已儲存 · 自動同步':'未設定');if(syncUrl)syncNow(false);};
   $('#syncNowBtn').onclick=()=>syncNow(true);
+  $('#syncTestBtn').onclick=syncTest;
 }
 
 /* ══════════════ 啟動 ══════════════ */

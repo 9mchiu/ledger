@@ -14,6 +14,9 @@
  *       要加公式／圖表請另開工作表用 QUERY／IMPORTRANGE 參照。
  */
 
+/* 腳本版本：App 的「測試連線」會讀這個，用來確認你部署的是不是最新版 */
+var SCRIPT_VER = '2026-11-01-v2';
+
 /* 這些分類一律不計入「已花費」，與 App 的 EX_CATS 必須一致 */
 var EX_CATS = ['房租', '學貸', '帳單', '孝親費'];
 function inBudget_(x) {
@@ -33,7 +36,15 @@ var TABS = {
 };
 
 function doGet() {
-  return ContentService.createTextOutput('ledger sync ok').setMimeType(ContentService.MimeType.TEXT);
+  var tabs = [];
+  for (var k in TABS) tabs.push(TABS[k]);
+  return json_({ok: true, ver: SCRIPT_VER, tabs: tabs,
+                sheet: SpreadsheetApp.getActiveSpreadsheet().getName()});
+}
+
+function json_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
@@ -53,11 +64,11 @@ function doPost(e) {
     writeSummary_(ss, d);
     writeMeta_(ss, d);
 
-    return ContentService.createTextOutput(JSON.stringify({ok: true}))
-      .setMimeType(ContentService.MimeType.JSON);
+    return json_({ok: true, ver: SCRIPT_VER,
+                  items: (d.items || []).length, trips: (d.trips || []).length,
+                  at: new Date().toISOString()});
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ok: false, error: String(err)}))
-      .setMimeType(ContentService.MimeType.JSON);
+    return json_({ok: false, ver: SCRIPT_VER, error: String(err)});
   } finally {
     lock.releaseLock();
   }
